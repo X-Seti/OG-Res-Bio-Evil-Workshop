@@ -52,7 +52,7 @@ def _is_standalone():
 
 APPSETTINGS_AVAILABLE = None
 STANDALONE_MODE = _is_standalone()
-App_name = "BioRes-Evil Workshop"
+App_name = "ResDio-Evil Workshop"
 App_build = "December 11 - "
 App_auth = "X-Seti"
 
