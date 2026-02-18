@@ -2,13 +2,15 @@
 ├── AI_Rules.md
 ├── apps
 │   ├── components
-│   │   └── ResBio_Evil_Workshop
-│   │       ├── depends
-│   │       │   ├── col_3d_viewport.py
-│   │       │   └── svg_icon_factory.py
-│   │       └── ResBio_Evil_Workshop.py
+│   │   ├── ResBio_Evil_Workshop
+│   │   │   ├── depends
+│   │   │   │   ├── col_3d_viewport.py
+│   │   │   │   ├── img_debug_functions.py
+│   │   │   │   └── svg_icon_factory.py
+│   │   │   └── ResBio_Evil_Workshop.py
+│   │   └── research_tab.py
 │   ├── core
-│   │   └── Core_Functions_Here
+│   │   └── research_db.py
 │   ├── gui
 │   │   └── GUI_Display_Functions
 │   ├── locals
@@ -58,8 +60,9 @@
 │       ├── themer_settings.json
 │       └── update_themes_script.py
 ├── cc.py
-├── ChangeLog
-├── ChangeLog.txt
+├── ChangeLog.md
+├── docs
+│   └── RESEARCH_INTEGRATION_GUIDE.md
 ├── launcher.py
 ├── LICENSE
 ├── RE1_FILE_FORMATS_RESEARCH.md
@@ -141,6 +144,7 @@
 │       ├── rgb2bmp.vcproj
 │       ├── rofs.vcproj
 │       └── sld.vcproj
+├── research_db.json
 └── tree.git
 
-15 directories, 129 files
+16 directories, 132 files

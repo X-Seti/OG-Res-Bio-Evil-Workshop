@@ -70,14 +70,14 @@ if STANDALONE_MODE:
         sys.path.insert(0, current_dir)
 
     try:
-        from depends.col_core_classes import (
-            COLFile, COLModel, COLVersion, COLMaterial, COLFaceGroup,
-            COLSphere, COLBox, COLVertex, COLFace, Vector3, BoundingBox
-        )
-        from depends.col_dialogs import (
-            show_col_analysis_dialog, show_col_batch_processor,
-            show_col_file_dialog
-        )
+        #from depends.col_core_classes import (
+        #    COLFile, COLModel, COLVersion, COLMaterial, COLFaceGroup,
+        #    COLSphere, COLBox, COLVertex, COLFace, Vector3, BoundingBox
+        #)
+        #from depends.col_dialogs import (
+        #    show_col_analysis_dialog, show_col_batch_processor,
+        #    show_col_file_dialog
+        #)
         from depends.svg_icon_factory import SVGIconFactory
         from depends.img_debug_functions import img_debugger
     except ImportError as e:
@@ -546,6 +546,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         #Create toolbar - FIXED: Hide drag button when docked, ensure buttons visible
         from depends.svg_icon_factory import SVGIconFactory
 
+        self.research_tab = None  # Initialize research tab reference
         self.titlebar = QFrame()
         self.titlebar.setFrameStyle(QFrame.Shape.StyledPanel)
         self.titlebar.setFixedHeight(self.titlebarheight)
@@ -591,6 +592,15 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
         layout.addStretch()
         #layout.addStretch()
+
+        #Research button here.
+        self.research_btn = QPushButton("Research")
+        self.research_btn.setFont(self.button_font)
+        self.research_btn.setIcon(self._create_research_icon())  # NEW ICON METHOD
+        self.research_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
+        self.research_btn.setToolTip("Open Research Database (Ctrl+R)")
+        self.research_btn.clicked.connect(self._on_research_clicked)
+        layout.addWidget(self.research_btn)
 
         # Only show "Open IMG" button if NOT standalone
         if not self.standalone_mode:
@@ -825,7 +835,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
     def _create_middle_panel(self): #ver 1
 
-        panel = QGroupBox("Obj Objects")
+        panel = QGroupBox("")
         panel.setStyleSheet("""
             QGroupBox {
                 font-weight: bold;
@@ -3377,6 +3387,18 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
         super().keyPressEvent(event)
 
+    def keyPressEvent(self, event): #vers 1_updated
+        """Handle keyboard shortcuts including Research DB"""
+        from PyQt6.QtCore import Qt
+
+        # Ctrl+R - Research Database
+        if event.key() == Qt.Key.Key_R and event.modifiers() == Qt.KeyboardModifier.ControlModifier:
+            self._on_research_clicked()
+            event.accept()
+            return
+
+        # Your existing key handlers...
+        super().keyPressEvent(event)
 
     def _enable_move_mode(self): #vers 2
         # Enable move window mode using system move
@@ -3745,9 +3767,6 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
         super().mouseDoubleClickEvent(event)
 
-
-
-
     def _toggle_maximize(self): #vers 1
         #Toggle window maximize state
         if self.isMaximized():
@@ -3761,7 +3780,283 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         event.accept()
 
 
+# - Logic stuff here.
+
+    def _on_research_clicked(self): #vers 9_right_panel
+        """Handle research button - show categories in middle with back button"""
+        try:
+            img_debugger.debug("Loading Research Database...")
+            from apps.components.research_tab import ResearchTab
+            from PyQt6.QtWidgets import QTableWidgetItem, QPushButton, QHBoxLayout, QLabel
+
+            # Create/load research database
+            if not hasattr(self, 'research_tab') or self.research_tab is None:
+                self.research_tab = ResearchTab(self)
+                self.research_tab.load_database()
+
+            self.research_history = []
+
+            # Get the middle panel (QGroupBox)
+            middle_parent = self.middle_list.parent()
+            if not middle_parent:
+                return
+
+            # Clear middle panel layout
+            layout = middle_parent.layout()
+            if layout:
+                # Remove all widgets except keep table
+                while layout.count() > 1:
+                    item = layout.takeAt(0)
+                    if item and item.widget():
+                        item.widget().deleteLater()
+
+                # Add header with back button at top
+                header = QHBoxLayout()
+
+                back_btn = QPushButton("← Back")
+                back_btn.setMaximumWidth(80)
+                back_btn.setVisible(False)
+                back_btn.clicked.connect(self._on_research_back)
+                header.addWidget(back_btn)
+
+                title = QLabel("Research: Categories")
+                header.addWidget(title)
+                header.addStretch()
+
+                self.research_back_btn = back_btn
+                self.research_title = title
+
+                layout.insertLayout(0, header)
+
+            # Show categories
+            self._research_show_categories()
+
+        except Exception as e:
+            from PyQt6.QtWidgets import QMessageBox
+            img_debugger.error(f"Research error: {str(e)}")
+            QMessageBox.critical(self, "Error", str(e))
+
+
+    def _research_show_categories(self): #vers 1
+        """Show research categories in middle panel"""
+        try:
+            categories = self.research_tab.db.get_categories()
+
+            self.middle_list.setRowCount(0)
+            self.middle_list.setColumnCount(1)
+            self.middle_list.setHorizontalHeaderLabels(["Categories"])
+
+            from PyQt6.QtWidgets import QTableWidgetItem
+            for idx, cat in enumerate(categories):
+                self.middle_list.insertRow(idx)
+                self.middle_list.setItem(idx, 0, QTableWidgetItem(cat))
+
+            try:
+                self.middle_list.itemClicked.disconnect()
+            except:
+                pass
+            self.middle_list.itemClicked.connect(self._on_research_category_click)
+
+            self.research_title.setText("Research: Categories")
+            self.research_back_btn.setVisible(False)
+            self.research_history = []
+
+            # Clear right panel
+            self._research_clear_right_panel()
+
+            img_debugger.debug(f"Loaded {len(categories)} categories")
+
+        except Exception as e:
+            img_debugger.error(f"Error: {str(e)}")
+
+
+    def _on_research_category_click(self, item): #vers 1
+        """Show entries for selected category"""
+        try:
+            category = item.text()
+            entries = self.research_tab.db.get_entries_by_category(category)
+
+            self.research_history.append(('categories', None))
+
+            self.middle_list.setRowCount(0)
+            self.middle_list.setColumnCount(2)
+            self.middle_list.setHorizontalHeaderLabels(["Title", "Tags"])
+
+            from PyQt6.QtWidgets import QTableWidgetItem
+            for idx, entry in enumerate(entries):
+                self.middle_list.insertRow(idx)
+                self.middle_list.setItem(idx, 0, QTableWidgetItem(entry['title']))
+                tags = ", ".join(entry.get('tags', []))
+                self.middle_list.setItem(idx, 1, QTableWidgetItem(tags))
+
+                # Store entry data
+                self.middle_list.item(idx, 0).entry_data = entry
+
+            try:
+                self.middle_list.itemClicked.disconnect()
+            except:
+                pass
+            self.middle_list.itemClicked.connect(self._on_research_entry_click)
+
+            self.research_title.setText(f"Research: {category}")
+            self.research_back_btn.setVisible(True)
+
+            # Clear right panel
+            self._research_clear_right_panel()
+
+            img_debugger.debug(f"Showing {len(entries)} entries")
+
+        except Exception as e:
+            img_debugger.error(f"Category error: {str(e)}")
+
+
+    def _on_research_entry_click(self, item): #vers 1
+        """Show entry content in right panel"""
+        try:
+            entry_item = self.middle_list.item(item.row(), 0)
+            if not hasattr(entry_item, 'entry_data'):
+                return
+
+            entry = entry_item.entry_data
+
+            # Display in right panel
+            self._research_display_in_right_panel(entry)
+
+            img_debugger.debug(f"Displaying: {entry['title']}")
+
+        except Exception as e:
+            img_debugger.error(f"Entry error: {str(e)}")
+
+
+    def _research_display_in_right_panel(self, entry): #vers 1
+        """Display research entry in right panel"""
+        try:
+            # Find text widget in right panel
+            # Look for info_label, content widget, or create if needed
+
+            content_text = f"""
+    TITLE:
+    {entry['title']}
+
+    CATEGORY:
+    {entry['category']}
+
+    TAGS:
+    {', '.join(entry.get('tags', []))}
+
+    ───────────────────────────────────
+
+    CONTENT:
+
+    {entry['content']}
+
+    ───────────────────────────────────
+
+    Created: {entry.get('created', 'N/A')}
+    Modified: {entry.get('modified', 'N/A')}
+    """
+
+            # Try to find an existing text display in right panel
+            if hasattr(self, 'info_display') and self.info_display:
+                if hasattr(self.info_display, 'setText'):
+                    self.info_display.setText(content_text)
+                    return
+
+            # Try other widget names
+            widget_names = ['info_label', 'content_text', 'details_text', 'display_text']
+            for name in widget_names:
+                if hasattr(self, name):
+                    widget = getattr(self, name)
+                    if widget and hasattr(widget, 'setText'):
+                        widget.setText(content_text)
+                        return
+
+            # If no widget exists, print to debug
+            img_debugger.warning("No text widget found in right panel for display")
+            print(content_text)  # Fallback to console
+
+        except Exception as e:
+            img_debugger.error(f"Display error: {str(e)}")
+
+
+    def _research_clear_right_panel(self): #vers 1
+        """Clear right panel content"""
+        try:
+            widget_names = ['info_display', 'info_label', 'content_text', 'details_text', 'display_text']
+            for name in widget_names:
+                if hasattr(self, name):
+                    widget = getattr(self, name)
+                    if widget and hasattr(widget, 'setText'):
+                        widget.setText("")
+        except:
+            pass
+
+
+    def _on_research_back(self): #vers 1
+        """Back button - return to previous view"""
+        try:
+            if not self.research_history:
+                self._research_show_categories()
+                return
+
+            self.research_history.pop()
+            self._research_show_categories()
+
+            img_debugger.debug("Back to categories")
+
+        except Exception as e:
+            img_debugger.error(f"Back error: {str(e)}")
+
+
+    def _on_research_entry_selected(self, entry): #vers 1
+        """Handle research entry selection - show content in right panel"""
+        try:
+            # Get right panel (it's a QFrame with layouts)
+            # Update the info section with entry content
+
+            # Find and clear existing content displays
+            # This depends on right panel structure - update as needed
+
+            img_debugger.debug(f"Selected entry: {entry['title']}")
+
+        except Exception as e:
+            img_debugger.error(f"Entry selection error: {str(e)}")
+
+
 # - SVG icons should be in there own folder, example depends/svg_icons.py
+
+    def _create_research_icon(self): #vers 1
+        """Create Research Database icon (book/notebook)"""
+        svg_data = b'''<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M4 19.5h16a1.5 1.5 0 001.5-1.5V5a1.5 1.5 0 00-1.5-1.5H4A1.5 1.5 0 002.5 5v13a1.5 1.5 0 001.5 1.5z"
+                stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M12 3v18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <path d="M7 9h2M7 13h2M7 17h2M15 9h2M15 13h2M15 17h2"
+                stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>'''
+        return self._svg_to_icon(svg_data)
+
+
+    def _svg_to_icon(self, svg_data: bytes, size: int = 20) -> object: #vers 1
+        """Convert SVG bytes to QIcon (theme-aware)"""
+        from PyQt6.QtSvg import QSvgRenderer
+        from PyQt6.QtGui import QPixmap, QPainter, QIcon, QColor
+        from PyQt6.QtCore import QByteArray
+
+        # Get current text color for theme compatibility
+        color = self.palette().text().color()
+        svg_str = svg_data.decode('utf-8').replace('currentColor', color.name())
+
+        renderer = QSvgRenderer(QByteArray(svg_str.encode('utf-8')))
+        pixmap = QPixmap(size, size)
+        pixmap.fill(Qt.GlobalColor.transparent)
+
+        painter = QPainter(pixmap)
+        renderer.render(painter)
+        painter.end()
+
+        return QIcon(pixmap)
+
 
     def _set_checkerboard_bg(self): #vers 1
         """Set checkerboard background"""

@@ -1,0 +1,71 @@
+{
+  "comment": "this belongs in /research_db.json (root) - Version: 1",
+  "version": "1.0",
+  "created": "2025-02-18T00:00:00",
+  "last_modified": "2025-02-18T00:00:00",
+  "entries": [
+    {
+      "id": 1,
+      "title": "RDT Format Overview",
+      "category": "RE1",
+      "content": "# RDT Format (Room Description Table)\n\n**Purpose:** Contains complete room data including camera positions, collision, items, enemies, scripts.\n\n**File Naming:** roomSXX0.rdt (S=stage, XX=location hex)\n\n**Key Offsets:**\n- Offset 0: Camera switches\n- Offset 1: Collision boundaries (SCA)\n- Offset 2: Items/obstacles\n- Offset 3: TMD/TIM model references\n- Offset 6: Initialization script (SCD)\n- Offset 7: Execution script (SCD)\n\n**Header Structure:** 8 bytes + 19 offset pointers (4 bytes each)\n\n## Implementation Notes\n- All values are little-endian\n- Camera data at offset 0x94 in file\n- Variable-length sections require careful offset tracking",
+      "tags": ["RDT", "Format", "RE1", "Parser"],
+      "created": "2025-02-18T00:00:00",
+      "modified": "2025-02-18T00:00:00"
+    },
+    {
+      "id": 2,
+      "title": "EMD 3D Model Format",
+      "category": "RE1",
+      "content": "# EMD Format (Enemy/NPC Models)\n\n**Purpose:** Complete 3D model data for characters, enemies, NPCs.\n\n**Structure:**\n- Directory at END of file (last 16 bytes)\n- 4 sections: Geometry, Skeleton, Animation, Texture\n\n**Section 0: Vertices & Normals**\n```\nemd_vertex_t {\n  signed short x, y, z;\n  signed short zero;  // padding\n}\n```\n\n**Section 1: Skeleton Animation**\n- Bone data with rotation angles\n- Up to 15 bones per animation frame\n\n**Section 2: Animation Metadata**\n- Frame counts and offsets\n\n**Section 3: Embedded TIM**\n- Texture image (Sony PSX format)\n\n## Notes\n- Coordinates are fixed-point (divide by 4096 for world units)\n- Max 17 models per room\n- Triangles only (no quads)",
+      "tags": ["EMD", "Format", "RE1", "3D Model"],
+      "created": "2025-02-18T00:00:00",
+      "modified": "2025-02-18T00:00:00"
+    },
+    {
+      "id": 3,
+      "title": "RE2/RE3 RDT Differences",
+      "category": "RE2",
+      "content": "# RE2 and RE3 RDT Format Differences\n\n**Status:** RE3 RDTs are identical to RE2 RDTs\n\n**Key Differences from RE1:**\n\n| Aspect | RE1 | RE2/RE3 |\n|--------|-----|----------|\n| 3D Models | EMD (characters) | MD1 (room objects) |\n| Header | Simple counts | More complex structure |\n| Offset indices | 19 offsets | Different mapping |\n| Camera field | num_cameras | num_object7 |\n| Model format | EMD | MD1 (variant of TMD) |\n\n**Offset Mapping (RE2/RE3):**\n- RID: Camera data\n- RVD: Camera trigger zones\n- LIT: Lighting\n- PRI: Priority masks\n- SCA: Collision\n- MD1: 3D models (room objects)\n- TIM: Textures\n- SCD: Scripts\n\n**File Naming:** roomSXXP.rdt (P=player: 0=Leon, 1=Claire)\n\n## Parser Strategy\n- Implement version detection (check header format)\n- Use polymorphic offset mapping\n- Shared code for common structures\n- RE2/RE3 support in Phase 2",
+      "tags": ["RDT", "RE2", "RE3", "Format", "MD1"],
+      "created": "2025-02-18T00:00:00",
+      "modified": "2025-02-18T00:00:00"
+    },
+    {
+      "id": 4,
+      "title": "TIM Texture Format",
+      "category": "General",
+      "content": "# TIM Format (PSX Texture Images)\n\n**Purpose:** Sony PlayStation texture format used throughout RE series.\n\n**Header (8 bytes minimum):**\n```\nmagic: 0x10000000 (little-endian)\nflags: BPP + palette flags\n```\n\n**Supported Color Modes:**\n- 4-bit (16 colors) - Palletized\n- 8-bit (256 colors) - Palletized  \n- 16-bit - Direct color (RGB 5:5:5 + 1-bit alpha)\n- 24-bit - RGB (8:8:8)\n\n**File Structure:**\n1. Header\n2. Optional palette data (if palletized)\n3. Pixel data\n4. Optional CLUT (Color Lookup Table)\n\n## Implementation Notes\n- Most RE textures are 16-bit direct color\n- Palette-based formats require CLUT lookup\n- Embedded TIMs in EMD/RDT sections lack full header\n- Common resolution: 256x256 pixels",
+      "tags": ["TIM", "Texture", "Format", "PS1"],
+      "created": "2025-02-18T00:00:00",
+      "modified": "2025-02-18T00:00:00"
+    },
+    {
+      "id": 5,
+      "title": "Collision Boundaries (SCA)",
+      "category": "RE1",
+      "content": "# SCA Format (Collision Boundaries)\n\n**Purpose:** Defines collision mesh for room geometry. Used for player movement, hit detection, and walkable areas.\n\n**Header (24 bytes):**\n```\nCx: unsigned short  // Ceiling X position\nCz: unsigned short  // Ceiling Z position\ncounts[5]: unsigned long  // Count of 5 object types\n```\n\n**Collision Object Types:**\n1. Walls\n2. Floors\n3. Doors\n4. Obstacles\n5. Unknown type\n\n**Structure:** Variable-length entries after header defining polygons/areas per type.\n\n## Notes\n- Essential for character movement\n- Must load before pathfinding\n- Separate from visual geometry (RDT cameras)\n- Coordinates match 3D space",
+      "tags": ["SCA", "Collision", "Format", "RE1"],
+      "created": "2025-02-18T00:00:00",
+      "modified": "2025-02-18T00:00:00"
+    },
+    {
+      "id": 6,
+      "title": "Script Format (SCD)",
+      "category": "General",
+      "content": "# SCD Format (Room Scripts)\n\n**Purpose:** Bytecode scripts for room initialization, runtime behavior, and events.\n\n**Script Types:**\n\n1. **Initialization Script (Offset 6)**\n   - Runs once when room loads\n   - Sets up room state\n\n2. **Execution Script (Offset 7)**\n   - Continuous runtime updates\n   - Frame-by-frame logic\n\n3. **Event Scripts (Offset 8)**\n   - Triggered by specific game events\n   - Multiple independent scripts\n\n**Structure:** `unsigned short length` + bytecode\n\n**Stack-Based VM Operations:**\n- Push/pop values\n- Function calls\n- Conditional branches\n- Variable assignments\n\n**Common Script Operations:**\n- Camera control\n- NPC spawning/movement\n- Door lock/unlock\n- Item placement\n- Effect triggers\n- Puzzle logic\n\n## Parser Notes\n- Bytecode opcodes vary between RE1/RE2/RE3\n- Requires opcode lookup table\n- Complex conditional logic\n- Deferred implementation (Phase 4)",
+      "tags": ["SCD", "Script", "Bytecode", "Format"],
+      "created": "2025-02-18T00:00:00",
+      "modified": "2025-02-18T00:00:00"
+    },
+    {
+      "id": 7,
+      "title": "reevengi-tools Reference",
+      "category": "Tools",
+      "content": "# reevengi-tools - RE File Format Tools\n\n**GitHub:** pmandin/reevengi-tools\n**Purpose:** Collection of tools for RE file format extraction and conversion.\n\n**Key Tools:**\n- **RDTool:** Extracts RDT sections into folder structure\n- **RE1MV:** RE1 Model Viewer (EMD visualization)\n- **TIM Converters:** TIM ↔ BMP/PNG conversion\n- **EMD/PLD Extractors:** Model and animation extraction\n\n**RDTool Output Structure:**\n```\nROOM_DATA/\n├── CAMERA/\n│   └── *.bin (camera data)\n├── EFFECT/\n│   └── *.TIM (effect sprites)\n├── OBJECT/\n│   ├── *.TMD (models)\n│   └── *.TIM (textures)\n├── SCRIPT_01/\n│   └── *.SCD (scripts)\n└── SCRIPT_02/\n    └── *.SCD (scripts)\n```\n\n**Usage:**\n```\nRDTool.exe ROOM0000.RDT -e  // Extract\nRDTool.exe ROOM0000.RDT -c  // Create/repack\n```\n\n## Research Value\n- Reference implementation for offset parsing\n- Validates our understanding of format\n- Source for bytecode opcode definitions\n- Community-maintained documentation",
+      "tags": ["Tools", "reevengi", "RDTool", "Parser"],
+      "created": "2025-02-18T00:00:00",
+      "modified": "2025-02-18T00:00:00"
+    }
+  ]
+}
