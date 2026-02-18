@@ -1,6 +1,6 @@
 
 #!/usr/bin/env python3
-#this belongs in ~/apps/apps/components/Resbio-Evil-Workshop/ResBio-Evil-Workshop.py - Version: 1
+#this belongs in ~/apps/components/Resbio-Evil-Workshop/ResBio-Evil-Workshop.py - Version: 1
 # X-Seti - December11 2025 - template - placeholder
 
 """
@@ -53,7 +53,7 @@ def _is_standalone():
 APPSETTINGS_AVAILABLE = None
 STANDALONE_MODE = _is_standalone()
 
-App_name = "ResDio-Evil Workshop"
+App_name = "ResBio-Evil Workshop"
 App_build = "December 11 - "
 App_auth = "X-Seti"
 
@@ -163,6 +163,8 @@ class GenericFile: pass
 class GenericObject: pass
 
 class COLVersion: COL_1 = None
+class MODVersion: COL_1 = None
+class TEXVersion: COL_1 = None
 
 class img_debugger:
     @staticmethod
@@ -323,7 +325,7 @@ class ZoomablePreview(QLabel): #Example
         painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, self.placeholder_text)
 
 
-class GUIWorkshop(QWidget): #ver 1
+class ResBioEvilWorkshop(QWidget): #ver 1
     workshop_closed = pyqtSignal()
     window_closed = pyqtSignal()
 
@@ -4658,7 +4660,7 @@ if __name__ == "__main__":
         app = QApplication(sys.argv)
         print("QApplication created")
 
-        workshop = GUIWorkshop()
+        workshop = ResBioEvilWorkshop()
         print(App_name + " instance created")
 
         workshop.setWindowTitle(App_name + " - Standalone")
