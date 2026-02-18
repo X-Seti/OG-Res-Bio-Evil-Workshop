@@ -1,5 +1,5 @@
 --- simplified -- help me fix bugs -- created 21November 2025
-Important rules to remember: Project name is Img Factory 1.5
+Important rules to remember: Project name is Res-Bio-Evil-Workshop
 
 1. To avoid confusion, the file must include #this belongs in [dir]/ [filename] or goes in root /[filename] - Version: [number] of updates to file, Keep the existing file header comments. "X-Seti - $MONTH$DATE 2025 -" rest of the header information.
 

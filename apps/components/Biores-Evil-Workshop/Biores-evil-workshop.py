@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-#this belongs in ~/Desktop/gui_template,.py - Version: 1
+#this belongs in ~/Desktop/gui_template,.py - Version: 1 - changeme!
 # X-Seti - December11 2025 - template - placeholder
 
 
@@ -52,7 +52,7 @@ def _is_standalone():
 
 APPSETTINGS_AVAILABLE = None
 STANDALONE_MODE = _is_standalone()
-App_name = "Col Workshop"
+App_name = "BioRes-Evil Workshop"
 App_build = "December 11 - "
 App_auth = "X-Seti"
 
@@ -60,7 +60,7 @@ App_auth = "X-Seti"
 # Conditional imports based on mode
 if STANDALONE_MODE:
     # STANDALONE MODE - Use local depends/ folder
-    print("COL Workshop: Standalone mode detected")
+    print(App_name + ": Standalone mode detected")
 
     # Add current directory to path for depends imports
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -155,12 +155,6 @@ OPENGL_AVAILABLE = False
 # Detect mode
 def _is_standalone():
     return True
-
-STANDALONE_MODE = _is_standalone()
-App_name = "GUI Workshop" # change me
-App_build = "December 11 - "
-App_auth = "X-Seti"
-
 
 # Fallback minimal classes for structure only
 class GenericFile: pass
