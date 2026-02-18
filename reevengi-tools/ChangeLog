@@ -1,0 +1,32 @@
+v 0.5
+
+- iso_search: Limit extracted file sizes to 512K.
+- iso_search: Added support for 2336 bytes per sector.
+- iso_search: Use MD5 to identify files compared to PC version.
+- iso_search: Add -e (file extraction) and -s (source integration) command line
+  parameters.
+- pak2tim: Add -r4 command line param for images stored with 4 pixels less on
+  their border.
+- adt2img: Add -noreorg command line param to keep depacked image as is.
+- file2pak: Added pak file packer.
+- file2pak: Add -r4 command line param for images stored with 4 pixels less on
+  their border.
+
+v 0.4
+
+- ROFS: Fixed decompression in 32KB blocks.
+- Added file searcher for RE3 PS1 CD-ROM ISO images.
+
+v 0.3
+
+- Add converters from PIX to BMP, PTC to BMP, RGB to BMP.
+- Add depackers for RE3 ROFS and SLD archives.
+
+v 0.2
+
+- Added depackers for BSS and ADT image files.
+
+
+v 0.1
+
+- First release

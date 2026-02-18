@@ -1,0 +1,87 @@
+			Reevengi tools
+
+			Conversion utilities for
+			Resident Evil games
+
+
+
+0 Disclaimer
+------------
+
+Here is a collection of software conversion tools.
+Use at your own risks.
+
+
+1 Command-line parameters
+-------------------------
+
+Most tools take a single file as input parameter. Converted or extracted files
+will be created in current directory.
+
+
+2 Tools list
+------------
+
+adt2img:	Depack Resident Evil 2 PC ADT image files.
+		The result is either a raw image (saved to BMP in this case)
+		or a TIM image (saved to TIM).
+
+		Use '-noreorg' command line parameter to keep depacked image
+		as is, for RE2 PC versions that do not have have them organized
+		in 256x256 block + 64x128 blocks.
+
+bss2bmp:	Depack PS1 BSS image files.
+		The result is saved to a BMP image.
+		Use '-w <width>' to change width (default = 320)
+		Use '-h <height>' to change height (default = 240)
+
+bsssld2tim:	Depack PS1 TIM mask (stored in BSS after background)
+		You must extract it from BSS first.
+		Use '-re3' to use RE3 algorithm (default is RE2)
+		The result is saved to a TIM image.
+
+pak2tim:	Depack Resident Evil PC PAK image files.
+		The result is saved to a TIM image.
+
+		Use '-r4' command line parameter for images that are stored with
+		4 pixels less.
+
+file2pak:	Pack Resident Evil PC PAK image files.
+		The result is saved to a PAK file.
+
+		Use '-r4' command line parameter for images that are stored with
+		4 pixels less.
+
+pix2bmp:	Convert Resident Evil PC PIX image files.
+		The result is saved to a BMP image.
+
+prs2file:	Depack a Saturn PRS compressed file 'filename.ext' to
+		'filename.ext.out'
+
+ptc2bmp:	Convert Resident Evil PC PTC image files.
+		The result is saved to a BMP image.
+
+rgb2bmp:	Convert Resident Evil PS1 RGB image files.
+		The result is saved to a BMP image.
+
+rofs:		Extract files from Resident Evil 3 PC ROFSxx.DAT archives.
+		Files are depacked in current directory.
+
+sld:		Extract files from Resident Evil 3 PC Rxxx.SLD archives.
+		Files are depacked in current directory as TIMxx.TIM images.
+
+extract_bin:	List and extract files from Resident Evil 2 PS1 DAT/*.BIN
+		archives.
+		Files are depacked in current directory.
+
+iso_search:	Search and extract some files from Resident Evil 3 PS1 CD-ROM
+		ISO image.
+		Files are depacked in current directory (.TIM or .EMD).
+
+		Use '-e' command line parameter to extract found files.
+		Use '-s' command line parameter to dump data for source code
+		integration.
+
+--
+Patrice Mandin <patmandin@gmail.com>
+Web: http://pmandin.atari.org/
