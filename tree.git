@@ -2,15 +2,11 @@
 ├── AI_Rules.md
 ├── apps
 │   ├── components
-│   │   └── Tmp_Template
+│   │   └── Resbio-Evil-Workshop
 │   │       ├── depends
 │   │       │   ├── col_3d_viewport.py
-│   │       │   ├── __pycache__
-│   │       │   │   └── svg_icon_factory.cpython-313.pyc
 │   │       │   └── svg_icon_factory.py
-│   │       ├── gui_template.py
-│   │       └── __pycache__
-│   │           └── gui_template.cpython-313.pyc
+│   │       └── ResBio-Evil-Workshop.py
 │   ├── core
 │   │   └── Core_Functions_Here
 │   ├── gui
@@ -61,9 +57,11 @@
 │       ├── app_settings_system.py
 │       ├── themer_settings.json
 │       └── update_themes_script.py
+├── cc.py
 ├── ChangeLog.txt
 ├── launcher.py
+├── LICENSE
 ├── Readme.md
-└── treegit
+└── tree.git
 
-13 directories, 54 files
+11 directories, 54 files

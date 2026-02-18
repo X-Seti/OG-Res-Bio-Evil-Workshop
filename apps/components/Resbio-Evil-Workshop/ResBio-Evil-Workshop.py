@@ -1,7 +1,7 @@
-#!/usr/bin/env python3
-#this belongs in ~/Desktop/gui_template,.py - Version: 1 - changeme!
-# X-Seti - December11 2025 - template - placeholder
 
+#!/usr/bin/env python3
+#this belongs in ~/apps/apps/components/Resbio-Evil-Workshop/ResBio-Evil-Workshop.py - Version: 1
+# X-Seti - December11 2025 - template - placeholder
 
 """
 Gui dest, Information
@@ -52,6 +52,7 @@ def _is_standalone():
 
 APPSETTINGS_AVAILABLE = None
 STANDALONE_MODE = _is_standalone()
+
 App_name = "ResDio-Evil Workshop"
 App_build = "December 11 - "
 App_auth = "X-Seti"
