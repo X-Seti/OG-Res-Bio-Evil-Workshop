@@ -1,6 +1,6 @@
 
 #!/usr/bin/env python3
-#this belongs in ~/apps/components/Resbio-Evil-Workshop/ResBio-Evil-Workshop.py - Version: 1
+#this belongs in ~/apps/components/ResBio_Evil_Workshop/ResBio_Evil_Workshop.py - Version: 1
 # X-Seti - December11 2025 - template - placeholder
 
 """
@@ -21,6 +21,7 @@ from PyQt6.QtGui import (
     QFont, QIcon, QPixmap, QColor, QPainter, QPen, QBrush, QAction, QCursor, QKeySequence, QPainterPath)
 
 from depends.svg_icon_factory import SVGIconFactory
+
 #from depends.img_debug_functions import img_debugger # TODO - Debugging is status window exists, otherwise the terminal will do.
 
 # OpenGL for 3D viewport
