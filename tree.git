@@ -2,11 +2,11 @@
 ├── AI_Rules.md
 ├── apps
 │   ├── components
-│   │   └── Resbio-Evil-Workshop
+│   │   └── ResBio_Evil_Workshop
 │   │       ├── depends
 │   │       │   ├── col_3d_viewport.py
 │   │       │   └── svg_icon_factory.py
-│   │       └── ResBio-Evil-Workshop.py
+│   │       └── ResBio_Evil_Workshop.py
 │   ├── core
 │   │   └── Core_Functions_Here
 │   ├── gui
@@ -58,10 +58,89 @@
 │       ├── themer_settings.json
 │       └── update_themes_script.py
 ├── cc.py
+├── ChangeLog
 ├── ChangeLog.txt
 ├── launcher.py
 ├── LICENSE
+├── RE1_FILE_FORMATS_RESEARCH.md
 ├── Readme.md
+├── reevengi-tools
+│   ├── AUTHORS
+│   ├── autogen.sh
+│   ├── autotools
+│   │   ├── compile
+│   │   ├── config.guess
+│   │   ├── config.sub
+│   │   ├── depcomp
+│   │   ├── install-sh
+│   │   └── missing
+│   ├── ChangeLog
+│   ├── configure.ac
+│   ├── COPYING
+│   ├── INSTALL
+│   ├── Makefile.am
+│   ├── NEWS
+│   ├── README
+│   ├── src
+│   │   ├── adt2img.c
+│   │   ├── background_tim.h
+│   │   ├── bin.c
+│   │   ├── bss2bmp.c
+│   │   ├── bsssld2tim.c
+│   │   ├── depack_adt.c
+│   │   ├── depack_adt.h
+│   │   ├── depack_bsssld.c
+│   │   ├── depack_bsssld.h
+│   │   ├── depack_mdec.c
+│   │   ├── depack_mdec.h
+│   │   ├── depack_pak.c
+│   │   ├── depack_pak.h
+│   │   ├── depack_prs.c
+│   │   ├── depack_prs.h
+│   │   ├── depack_sld.c
+│   │   ├── depack_sld.h
+│   │   ├── depack_vlc.c
+│   │   ├── depack_vlc.h
+│   │   ├── emd1.h
+│   │   ├── emd2.h
+│   │   ├── emd2xml.c
+│   │   ├── emd3.h
+│   │   ├── emd_common.h
+│   │   ├── file2pak.c
+│   │   ├── file_functions.c
+│   │   ├── file_functions.h
+│   │   ├── idctfst.c
+│   │   ├── idctfst.h
+│   │   ├── iso_search.c
+│   │   ├── Makefile.am
+│   │   ├── md5.c
+│   │   ├── md5.h
+│   │   ├── pack_pak.c
+│   │   ├── pack_pak.h
+│   │   ├── pak2tim.c
+│   │   ├── param.c
+│   │   ├── param.h
+│   │   ├── pix2bmp.c
+│   │   ├── prs2file.c
+│   │   ├── ptc2bmp.c
+│   │   ├── rgb2bmp.c
+│   │   ├── rofs.c
+│   │   └── sld.c
+│   └── vs2005
+│       ├── adt2img.vcproj
+│       ├── bss2bmp.vcproj
+│       ├── config.h
+│       ├── extract_bin.vcproj
+│       ├── file2pak.vcproj
+│       ├── iso_search.vcproj
+│       ├── Makefile.am
+│       ├── pak2tim.vcproj
+│       ├── pix2bmp.vcproj
+│       ├── ptc2bmp.vcproj
+│       ├── reevengi-tools.sln
+│       ├── rgb2bmp.vcproj
+│       ├── rofs.vcproj
+│       └── sld.vcproj
 └── tree.git
 
-11 directories, 54 files
+15 directories, 129 files
