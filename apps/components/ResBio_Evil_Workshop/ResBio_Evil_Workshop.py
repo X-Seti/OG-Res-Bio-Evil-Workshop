@@ -12,8 +12,7 @@ import sys
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple, Any
 from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSplitter, QListWidget, QListWidgetItem, QLabel, QPushButton, QFileDialog, QMessageBox, QGroupBox, QFormLayout, QLineEdit, QTextEdit, QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView, QMenu, QDialog, QCheckBox, QSpinBox, QDoubleSpinBox, QComboBox, QTabWidget, QScrollArea, QFrame,
-    QInputDialog, QProgressDialog)
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSplitter, QListWidget, QListWidgetItem, QLabel, QPushButton, QFileDialog, QMessageBox, QGroupBox, QFormLayout, QLineEdit, QTextEdit, QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView, QMenu, QDialog, QCheckBox, QSpinBox, QDoubleSpinBox, QComboBox, QTabWidget, QScrollArea, QFrame, QStackedWidget, QInputDialog, QProgressDialog)
 
 
 from PyQt6.QtCore import Qt, pyqtSignal, QSize, QPoint, QRect, QTimer
@@ -21,6 +20,15 @@ from PyQt6.QtGui import (
     QFont, QIcon, QPixmap, QColor, QPainter, QPen, QBrush, QAction, QCursor, QKeySequence, QPainterPath)
 
 from depends.svg_icon_factory import SVGIconFactory
+
+# Import AppSettings
+try:
+    from apps.utils.app_settings_system import AppSettings, SettingsDialog
+    APPSETTINGS_AVAILABLE = True
+except ImportError:
+    APPSETTINGS_AVAILABLE = False
+    print("Warning: AppSettings not available")
+
 
 #from depends.img_debug_functions import img_debugger # TODO - Debugging is status window exists, otherwise the terminal will do.
 
@@ -51,7 +59,6 @@ def _is_standalone():
     finally:
         del frame
 
-APPSETTINGS_AVAILABLE = None
 STANDALONE_MODE = _is_standalone()
 
 App_name = "ResBio-Evil Workshop"
@@ -106,7 +113,7 @@ if STANDALONE_MODE:
 
 else:
     # DOCKED MODE - Use main app structure (apps.*)
-    print("COL Workshop: Docked mode detected")
+    print(App_name + ": Docked mode detected")
 
     try:
         from apps.methods.col_core_classes import (
@@ -219,7 +226,7 @@ class GUIPropertiesWidget(QTabWidget): #ver 1
         self.addTab(self.model_tab, "  Model") # TODO Missing SVG icon for model
         self.spheres_tab = QWidget()
         self.setup_spheres_tab()
-        self.addTab(self.spheres_tab, "🔵 Spheres") # TODO Replace with SVG icon for Spheres
+        self.addTab(self.spheres_tab, "  Spheres") # TODO Replace with SVG icon for Spheres
         self.boxes_tab = QWidget()
         self.setup_boxes_tab()
         self.addTab(self.boxes_tab, "  Boxes") # TODO Missing SVG icon for Boxes
@@ -230,7 +237,90 @@ class GUIPropertiesWidget(QTabWidget): #ver 1
         self.setup_vert_tab()
         self.addTab(self.vert_tab, "  Vertices") # TODO Missing SVG icon for Vertices
 
-        # TODO other tabs for models functions.
+        if APPSETTINGS_AVAILABLE:
+            try:
+                self.app_settings = AppSettings()
+                self._load_fonts_from_settings()
+            except Exception as e:
+                print(f"Warning: Could not load AppSettings: {e}")
+                self.app_settings = None
+                self.default_font = QFont("Segoe UI", 9)
+                self.title_font = QFont("Adwaita Sans", 10)
+                self.panel_font = QFont("Adwaita Sans", 9)
+                self.button_font = QFont("Adwaita Sans", 9)
+        else:
+            self.app_settings = None
+            self.default_font = QFont("Segoe UI", 9)
+            self.title_font = QFont("Adwaita Sans", 10)
+            self.panel_font = QFont("Adwaita Sans", 9)
+            self.button_font = QFont("Adwaita Sans", 9)
+
+        self._initialize_features()
+
+
+    def _apply_button_mode(self, dialog): #vers 1
+        """Apply button display mode"""
+        mode_index = self.button_mode_combo.currentIndex()
+        mode_map = {0: 'both', 1: 'icons', 2: 'text'}
+
+        new_mode = mode_map[mode_index]
+
+        if new_mode != self.button_display_mode:
+            self.button_display_mode = new_mode
+            self._update_all_buttons()
+
+            if self.main_window and hasattr(self.main_window, 'log_message'):
+                mode_names = {0: 'Icons + Text', 1: 'Icons Only', 2: 'Text Only'}
+                self.main_window.log_message(f"✨ Button style: {mode_names[mode_index]}")
+
+        dialog.close()
+
+
+# - Window functionality
+
+    def _initialize_features(self): #vers 3
+        """Initialize all features after UI setup"""
+        try:
+            self._apply_theme()
+            self._update_status_indicators()
+
+            if self.main_window and hasattr(self.main_window, 'log_message'):
+                self.main_window.log_message("All features initialized")
+
+        except Exception as e:
+            if self.main_window and hasattr(self.main_window, 'log_message'):
+                self.main_window.log_message(f"Feature init error: {str(e)}")
+
+
+    def _load_fonts_from_settings(self): #vers 1
+        """Load font settings from AppSettings"""
+        if not self.app_settings:
+            return
+
+        settings = self.app_settings
+
+        self.default_font = QFont(
+            settings.get('default_font_family', 'Segoe UI'),
+            settings.get('default_font_size', 9)
+        )
+
+        self.title_font = QFont(
+            settings.get('title_font_family', 'Adwaita Sans'),
+            settings.get('title_font_size', 10)
+        )
+
+        self.panel_font = QFont(
+            settings.get('panel_font_family', 'Adwaita Sans'),
+            settings.get('panel_font_size', 9)
+        )
+
+        self.button_font = QFont(
+            settings.get('button_font_family', 'Adwaita Sans'),
+            settings.get('button_font_size', 9)
+        )
+
+        self.setFont(self.default_font)
+
 
     def setup_model_tab(self): #ver 1
         layout = QVBoxLayout(self.model_tab)
@@ -539,6 +629,941 @@ class ResBioEvilWorkshop(QWidget): #ver 1
     def _update_status_indicators(self): #vers 1
         pass
 
+    def _apply_fallback_theme(self): #vers 1
+        pass
+
+
+    def _adjust_brightness(self, hex_color, factor=None): #vers 1
+        """Adjust color brightness for alternate row colors
+
+        Args:
+            hex_color: Hex color string (#RRGGBB)
+            factor: Brightness factor (None for auto-detect based on luminance)
+
+        Returns:
+            Adjusted hex color string
+        """
+        try:
+            # Convert hex to RGB
+            rgb = tuple(int(hex_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
+
+            # Calculate luminance to determine if we should lighten or darken
+            luminance = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255
+
+            # Auto-detect factor if not provided
+            if factor is None:
+                if luminance > 0.5:  # Light theme - darken alternate rows
+                    factor = 0.95
+                else:  # Dark theme - lighten alternate rows
+                    factor = 1.05
+
+            # Apply factor
+            new_rgb = tuple(min(255, max(0, int(c * factor))) for c in rgb)
+            return f"#{new_rgb[0]:02x}{new_rgb[1]:02x}{new_rgb[2]:02x}"
+        except:
+            # Return original on error
+            return hex_color
+
+
+    def _apply_file_list_window_theme_styling(self): #vers 7
+        """Apply theme styling to the file list window"""
+        theme_colors = self._get_theme_colors("default")
+
+        # Extract variables FIRST
+        bg_secondary = theme_colors.get('bg_secondary', '#f8f9fa')
+        border = theme_colors.get('border', '#dee2e6')
+        button_normal = theme_colors.get('button_normal', '#e0e0e0')
+        text_primary = theme_colors.get('text_primary', '#000000')
+        bg_tertiary = theme_colors.get('bg_tertiary', '#e9ecef')
+
+        if hasattr(self, 'tab_widget'):
+            self.tab_widget.setStyleSheet(f"""
+                QTabWidget::pane {{
+                    background-color: {bg_secondary};
+                    border: 1px solid {border};
+                    border-radius: 3px;
+                }}
+                QTabBar::tab {{
+                    background-color: {button_normal};
+                    color: {text_primary};
+                    padding: 5px 10px;
+                    margin: 2px;
+                    border-radius: 3px;
+                }}
+                QTabBar::tab:selected {{
+                    background-color: {bg_tertiary};
+                    border: 1px solid {border};
+                }}
+            """)
+
+    def apply_table_theme(self): #vers 1
+        """Legacy method - Apply theme styling to table and related components"""
+        # This method is called by main application for compatibility
+        self.apply_all_window_themes()
+
+
+    def _is_dark_theme(self):
+        """
+        Returns True if the current theme name ends with _Dark.
+        Works with hundreds of themes: Retro_Dark, Amiga_Dark, etc.
+        Defaults to dark if theme settings are unavailable.
+        """
+        if APPSETTINGS_AVAILABLE and hasattr(self, "app_settings") and self.app_settings:
+            theme_name = self.app_settings.current_settings.get("theme", "").lower()
+            return theme_name.endswith("_dark")
+
+        return True
+
+    def _get_theme_colors(self, theme_name: str): #vers 8
+        """Returns a dictionary of theme colors from AppSettings current theme"""
+
+        theme_data = {}
+        theme_obj = {}  # Initialize here
+
+        # Get the CURRENT active theme from AppSettings
+        if APPSETTINGS_AVAILABLE and self.app_settings:
+            if hasattr(self.app_settings, 'current_settings'):
+                current_theme_name = self.app_settings.current_settings.get("theme", "")
+                debug(f"Current active theme: {current_theme_name}", "THEME")
+
+                # Try to load that theme's colors
+                if hasattr(self.app_settings, 'themes') and current_theme_name:
+                    theme_obj = self.app_settings.themes.get(current_theme_name, {})
+                    debug(f"Theme object keys: {list(theme_obj.keys())}", "THEME")
+
+        # Determine if this theme is dark or light
+        is_dark = self._is_dark_theme()
+        debug(f"Theme is dark: {is_dark}", "THEME")
+
+        # Only set defaults for MISSING keys (setdefault won't override existing)
+        if is_dark:
+            theme_data.setdefault("bg_primary", "#1a1a1a")
+            theme_data.setdefault("bg_secondary", "#2a2a2a")
+            theme_data.setdefault("text_primary", "#ffffff")
+            theme_data.setdefault("text_secondary", "#cccccc")
+            theme_data.setdefault("accent", "#00d8ff")
+            theme_data.setdefault("border", "#3a3a3a")
+            theme_data.setdefault("panel_bg", "#2d2d2d")
+            theme_data.setdefault("accent_primary", "#00d8ff")
+            theme_data.setdefault("button_normal", "#404040")
+        else:
+            theme_data.setdefault("bg_primary", "#ffffff")
+            theme_data.setdefault("bg_secondary", "#f8f9fa")
+            theme_data.setdefault("text_primary", "#000000")
+            theme_data.setdefault("text_secondary", "#495057")
+            theme_data.setdefault("accent", "#1976d2")
+            theme_data.setdefault("border", "#dee2e6")
+            theme_data.setdefault("panel_bg", "#f0f0f0")
+            theme_data.setdefault("accent_primary", "#1976d2")
+            theme_data.setdefault("button_normal", "#e0e0e0")
+
+        # Build tearoff button stylesheet
+        if is_dark:
+            button_style = f"""
+                QPushButton {{
+                    border: 1px solid {theme_data['border']};
+                    border-radius: 1px;
+                    background-color: {theme_data['bg_secondary']};
+                    color: {theme_data['text_primary']};
+                    font-size: 12px;
+                    font-weight: bold;
+                    padding: 0px;
+                    margin: 2px;
+                }}
+                QPushButton:hover {{
+                    background-color: {theme_data['accent']};
+                    border: 1px solid {theme_data['border']};
+                    color: {theme_data['text_secondary']};
+                }}
+                QPushButton:pressed {{
+                    background-color: {theme_data['bg_primary']};
+                    border: 1px solid {theme_data['border']};
+                    color: {theme_data['text_primary']};
+                }}
+            """
+        else:
+            button_style = f"""
+                QPushButton {{
+                    border: 1px solid {theme_data['border']};
+                    border-radius: 1px;
+                    background-color: {theme_data['bg_primary']};
+                    color: {theme_data['text_primary']};
+                    font-size: 12px;
+                    font-weight: bold;
+                    padding: 0px;
+                    margin: 2px;
+                }}
+                QPushButton:hover {{
+                    background-color: {theme_data['accent']};
+                    border: 1px solid {theme_data['border']};
+                    color: {theme_data['text_secondary']};
+                }}
+                QPushButton:pressed {{
+                    background-color: {theme_data['bg_secondary']};
+                    border: 1px solid {theme_data['border']};
+                    color: {theme_data['text_primary']};
+                }}
+            """
+
+        # Inject button style into theme data
+        theme_data["button_style"] = button_style
+
+        return theme_data
+
+
+    def _apply_theme(self): #vers 9
+        """Apply comprehensive theme to all GUI elements with direct widget styling"""
+
+        if self.app_settings and APPSETTINGS_AVAILABLE:
+            # Get base AppSettings stylesheet
+            base_stylesheet = self.app_settings.get_stylesheet()
+
+            # Get theme colors for MEL-specific styling
+            theme_colors = self._get_theme_colors("default")
+
+            # Calculate alternate row color
+            panel_bg = theme_colors.get('panel_bg', '#f0f0f0')
+            panel_bg_alt = self._adjust_brightness(panel_bg)
+
+            # Get other themed colors
+            text_primary = theme_colors.get('text_primary', '#000000')
+            border = theme_colors.get('border', '#dee2e6')
+            accent = theme_colors.get('accent_primary', '#1976d2')
+            bg_primary = theme_colors.get('bg_primary', '#ffffff')
+
+            # Calculate button color with good contrast
+            # Check if theme is light or dark
+            bg_rgb = tuple(int(bg_primary.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
+            luminance = (0.299 * bg_rgb[0] + 0.587 * bg_rgb[1] + 0.114 * bg_rgb[2]) / 255
+
+            if luminance > 0.5:
+                # Light theme - darken button background significantly for visibility
+                button_bg = self._adjust_brightness(bg_primary, 0.85)  # Much darker
+            else:
+                # Dark theme - lighten button background
+                button_bg = self._adjust_brightness(bg_primary, 1.15)
+
+            print(f"Button background calculated: {button_bg} (from bg_primary {bg_primary}, luminance {luminance:.2f})")
+
+            # Calculate hover/pressed colors
+            accent_hover = self._adjust_brightness(accent, 0.9)
+            button_hover = self._adjust_brightness(button_bg, 0.95)
+
+            # Apply base stylesheet first
+            self.setStyleSheet(base_stylesheet)
+
+            # Now apply MEL-specific styling DIRECTLY to widgets to override AppSettings
+            # This ensures our styles take precedence
+
+            # Style platform list
+            if hasattr(self, 'platform_list'):
+                self.platform_list.setStyleSheet(f"""
+                    QListWidget {{
+                        background-color: {bg_primary} !important;
+                        color: {text_primary} !important;
+                        border: 1px solid {border} !important;
+                        border-radius: 4px;
+                        padding: 2px;
+                    }}
+                    QListWidget::item {{
+                        padding: 5px;
+                        border-radius: 3px;
+                        color: {text_primary} !important;
+                    }}
+                    QListWidget::item:alternate {{
+                        background-color: {panel_bg_alt} !important;
+                    }}
+                    QListWidget::item:selected {{
+                        background-color: {accent} !important;
+                        color: #FFFFFF !important;
+                    }}
+                    QListWidget::item:hover {{
+                        background-color: {accent_hover} !important;
+                    }}
+                """)
+
+            # Style game list
+            if hasattr(self, 'game_list'):
+                self.game_list.setStyleSheet(f"""
+                    QListWidget {{
+                        background-color: {bg_primary} !important;
+                        color: {text_primary} !important;
+                        border: 1px solid {border} !important;
+                        border-radius: 4px;
+                        padding: 2px;
+                    }}
+                    QListWidget::item {{
+                        padding: 5px;
+                        border-radius: 3px;
+                        color: {text_primary} !important;
+                    }}
+                    QListWidget::item:alternate {{
+                        background-color: {panel_bg_alt} !important;
+                    }}
+                    QListWidget::item:selected {{
+                        background-color: {accent} !important;
+                        color: #FFFFFF !important;
+                    }}
+                    QListWidget::item:hover {{
+                        background-color: {accent_hover} !important;
+                    }}
+                """)
+
+            # Style display widget frame
+            if hasattr(self, 'display_widget') and hasattr(self.display_widget, 'display_frame'):
+                self.display_widget.display_frame.setStyleSheet(f"""
+                    QFrame {{
+                        background-color: {bg_primary} !important;
+                        border: 2px solid {border} !important;
+                        border-radius: 4px;
+                    }}
+                """)
+
+            # Apply titlebar colors
+            self._apply_titlebar_colors()
+
+            # Style bottom control buttons for better visibility
+            #self._style_control_buttons(button_bg, text_primary, accent, border)
+
+            # Apply fonts from AppSettings to widgets
+            self._apply_fonts_to_widgets()
+        else:
+            # Fallback when AppSettings not available
+            self._apply_fallback_theme()
+
+
+    def _get_icon_color(self): #vers 1
+        """Get icon color from current theme"""
+        if APPSETTINGS_AVAILABLE and self.app_settings:
+            colors = self.app_settings.get_theme_colors()
+            return colors.get('text_primary', '#ffffff')
+        return '#ffffff'
+
+
+    def _apply_fonts_to_widgets(self): #vers 1
+        """Apply fonts from AppSettings to all widgets"""
+        if not hasattr(self, 'default_font'):
+            return
+
+        print("\n=== Applying Fonts ===")
+        print(f"Default font: {self.default_font.family()} {self.default_font.pointSize()}pt")
+        print(f"Title font: {self.title_font.family()} {self.title_font.pointSize()}pt")
+        print(f"Panel font: {self.panel_font.family()} {self.panel_font.pointSize()}pt")
+        print(f"Button font: {self.button_font.family()} {self.button_font.pointSize()}pt")
+
+        # Apply default font to main window
+        self.setFont(self.default_font)
+
+        # Apply title font to titlebar
+        if hasattr(self, 'title_label'):
+            self.title_label.setFont(self.title_font)
+
+        # Apply panel font to lists
+        if hasattr(self, 'platform_list'):
+            self.platform_list.setFont(self.panel_font)
+        if hasattr(self, 'game_list'):
+            self.game_list.setFont(self.panel_font)
+
+        # Apply button font to all buttons
+        for btn in self.findChildren(QPushButton):
+            btn.setFont(self.button_font)
+
+        print("âœ“ Fonts applied to widgets")
+        print("======================\n")
+
+    def _style_control_buttons(self, button_bg, text_color, accent_color, border_color): #vers 4
+        """Style control buttons to match titlebar buttons exactly
+
+        Args:
+            button_bg: Background color from titlebar calculation
+            text_color: Text color from titlebar calculation
+            accent_color: Accent color for hover
+            border_color: Border color from theme
+        """
+
+        # Use exact same style as titlebar buttons
+        button_style = f"""
+            QPushButton {{
+                background-color: {button_bg} !important;
+                border: 1px solid {border_color} !important;
+                border-radius: 3px;
+                color: {text_color} !important;
+                padding: 5px 10px;
+                font-weight: bold;
+                min-height: 30px;
+            }}
+            QPushButton:hover {{
+                background-color: {accent_color} !important;
+                border-color: {border_color} !important;
+                color: #FFFFFF !important;
+            }}
+            QPushButton:pressed {{
+                background-color: {self._adjust_brightness(accent_color, 0.85)} !important;
+            }}
+            QPushButton:disabled {{
+                background-color: {self._adjust_brightness(button_bg, 1.05)} !important;
+                color: #888888 !important;
+                border-color: #555555 !important;
+            }}
+        """
+
+        # Apply to all buttons in display widget
+        if hasattr(self, 'display_widget'):
+            for btn in self.display_widget.findChildren(QPushButton):
+                btn.setStyleSheet(button_style)
+
+
+    def _apply_theme_not_found(self): #vers 5
+        """Apply theme to all GUI elements - comprehensive styling"""
+
+        if self.app_settings and APPSETTINGS_AVAILABLE:
+            # Get base AppSettings stylesheet
+            stylesheet = self.app_settings.get_stylesheet()
+
+            # Get theme colors for MEL-specific widgets
+            theme_colors = self._get_theme_colors("default")
+
+            # Extract all colors from theme
+            bg_primary = theme_colors.get('bg_primary', '#1f2f39')
+            bg_secondary = theme_colors.get('bg_secondary', '#293f4d')
+            bg_tertiary = theme_colors.get('bg_tertiary', '#18242d')
+            panel_bg = theme_colors.get('panel_bg', '#253447')
+
+            accent_primary = theme_colors.get('accent_primary', '#4f6f7A')
+            accent_secondary = theme_colors.get('accent_secondary', '#657682')
+
+            text_primary = theme_colors.get('text_primary', '#FFFFFF')
+            text_secondary = theme_colors.get('text_secondary', '#E2FFE9')
+            text_accent = theme_colors.get('text_accent', '#AFCFAF')
+
+            button_normal = theme_colors.get('button_normal', '#2f3f49')
+            button_hover = theme_colors.get('button_hover', '#0f0f09')
+            button_pressed = theme_colors.get('button_pressed', '#5f6f79')
+            button_text = theme_colors.get('button_text_color', '#FFFFFF')
+
+            border = theme_colors.get('border', '#135379')
+
+            splitter_bg = theme_colors.get('splitter_color_background', '#243845')
+            splitter_shine = theme_colors.get('splitter_color_shine', '#3e525e')
+            splitter_shadow = theme_colors.get('splitter_color_shadow', '#1f2f39')
+
+            scrollbar_bg = theme_colors.get('scrollbar_background', '#1d2c36')
+            scrollbar_handle = theme_colors.get('scrollbar_handle', '#114a6c')
+            scrollbar_handle_hover = theme_colors.get('scrollbar_handle_hover', '#0f4260')
+            scrollbar_handle_pressed = theme_colors.get('scrollbar_handle_pressed', '#0d3a54')
+            scrollbar_border = theme_colors.get('scrollbar_border', '#135379')
+
+            selection_bg = theme_colors.get('selection_background', '#4f6f7A')
+            selection_text = theme_colors.get('selection_text', '#ffffff')
+
+            # Comprehensive MEL stylesheet
+            mel_stylesheet = f"""
+                /* Main Window */
+                QWidget {{
+                    background-color: {bg_primary};
+                    color: {text_primary};
+                }}
+
+                /* Frames and Panels */
+                QFrame {{
+                    background-color: {panel_bg};
+                    border: 1px solid {border};
+                    border-radius: 4px;
+                }}
+
+                QFrame[frameShape="4"] {{  /* StyledPanel */
+                    background-color: {panel_bg};
+                    border: 1px solid {border};
+                }}
+
+                /* Group Boxes */
+                QGroupBox {{
+                    background-color: {panel_bg};
+                    border: 2px solid {border};
+                    border-radius: 5px;
+                    margin-top: 10px;
+                    padding-top: 15px;
+                    color: {text_primary};
+                    font-weight: bold;
+                }}
+
+                QGroupBox::title {{
+                    subcontrol-origin: margin;
+                    subcontrol-position: top left;
+                    padding: 5px 10px;
+                    color: {text_primary};
+                    background-color: {bg_secondary};
+                    border: 1px solid {border};
+                    border-radius: 3px;
+                }}
+
+                /* Buttons */
+                QPushButton {{
+                    background-color: {button_normal};
+                    border: 1px solid {border};
+                    border-radius: 4px;
+                    padding: 6px 12px;
+                    color: {button_text};
+                    min-height: 30px;
+                }}
+
+                QPushButton:hover {{
+                    background-color: {button_hover};
+                    border-color: {accent_primary};
+                }}
+
+                QPushButton:pressed {{
+                    background-color: {button_pressed};
+                    border-color: {accent_secondary};
+                }}
+
+                QPushButton:disabled {{
+                    background-color: {bg_tertiary};
+                    color: {text_secondary};
+                    border-color: {border};
+                }}
+
+                /* Lists */
+                QListWidget {{
+                    background-color: {bg_primary};
+                    alternate-background-color: {bg_secondary};
+                    border: 1px solid {border};
+                    border-radius: 4px;
+                    color: {text_primary};
+                    selection-background-color: {selection_bg};
+                    selection-color: {selection_text};
+                }}
+
+                QListWidget::item {{
+                    padding: 5px;
+                    border-bottom: 1px solid {bg_tertiary};
+                }}
+
+                QListWidget::item:selected {{
+                    background-color: {selection_bg};
+                    color: {selection_text};
+                }}
+
+                QListWidget::item:hover {{
+                    background-color: {accent_primary};
+                }}
+
+                /* Splitters */
+                QSplitter::handle:horizontal {{
+                    background-color: {splitter_bg};
+                    border: 1px solid {splitter_shadow};
+                    border-left: 1px solid {splitter_shine};
+                    width: 8px;
+                    margin: 2px;
+                    border-radius: 3px;
+                }}
+
+                QSplitter::handle:horizontal:hover {{
+                    background-color: {splitter_shine};
+                }}
+
+                QSplitter::handle:vertical {{
+                    background-color: {splitter_bg};
+                    border: 1px solid {splitter_shadow};
+                    border-top: 1px solid {splitter_shine};
+                    height: 8px;
+                    margin: 2px;
+                    border-radius: 3px;
+                }}
+
+                QSplitter::handle:vertical:hover {{
+                    background-color: {splitter_shine};
+                }}
+
+                /* Scrollbars */
+                QScrollBar:vertical {{
+                    background-color: {scrollbar_bg};
+                    width: 12px;
+                    border: 1px solid {scrollbar_border};
+                    border-radius: 3px;
+                }}
+
+                QScrollBar::handle:vertical {{
+                    background-color: {scrollbar_handle};
+                    min-height: 20px;
+                    border-radius: 3px;
+                    margin: 2px;
+                }}
+
+                QScrollBar::handle:vertical:hover {{
+                    background-color: {scrollbar_handle_hover};
+                }}
+
+                QScrollBar::handle:vertical:pressed {{
+                    background-color: {scrollbar_handle_pressed};
+                }}
+
+                QScrollBar::add-line:vertical,
+                QScrollBar::sub-line:vertical {{
+                    height: 0px;
+                }}
+
+                QScrollBar:horizontal {{
+                    background-color: {scrollbar_bg};
+                    height: 12px;
+                    border: 1px solid {scrollbar_border};
+                    border-radius: 3px;
+                }}
+
+                QScrollBar::handle:horizontal {{
+                    background-color: {scrollbar_handle};
+                    min-width: 20px;
+                    border-radius: 3px;
+                    margin: 2px;
+                }}
+
+                QScrollBar::handle:horizontal:hover {{
+                    background-color: {scrollbar_handle_hover};
+                }}
+
+                QScrollBar::handle:horizontal:pressed {{
+                    background-color: {scrollbar_handle_pressed};
+                }}
+
+                QScrollBar::add-line:horizontal,
+                QScrollBar::sub-line:horizontal {{
+                    width: 0px;
+                }}
+
+                /* Labels */
+                QLabel {{
+                    color: {text_primary};
+                    background-color: transparent;
+                }}
+
+                /* Line Edits */
+                QLineEdit {{
+                    background-color: {bg_secondary};
+                    border: 1px solid {border};
+                    border-radius: 3px;
+                    padding: 5px;
+                    color: {text_primary};
+                    selection-background-color: {selection_bg};
+                    selection-color: {selection_text};
+                }}
+
+                QLineEdit:focus {{
+                    border: 2px solid {accent_primary};
+                }}
+
+                /* Checkboxes */
+                QCheckBox {{
+                    color: {text_primary};
+                    spacing: 5px;
+                }}
+
+                QCheckBox::indicator {{
+                    width: 18px;
+                    height: 18px;
+                    border: 1px solid {border};
+                    border-radius: 3px;
+                    background-color: {bg_secondary};
+                }}
+
+                QCheckBox::indicator:checked {{
+                    background-color: {accent_primary};
+                    border-color: {accent_secondary};
+                }}
+
+                QCheckBox::indicator:hover {{
+                    border-color: {accent_primary};
+                }}
+
+                /* Radio Buttons */
+                QRadioButton {{
+                    color: {text_primary};
+                    spacing: 5px;
+                }}
+
+                QRadioButton::indicator {{
+                    width: 18px;
+                    height: 18px;
+                    border: 1px solid {border};
+                    border-radius: 9px;
+                    background-color: {bg_secondary};
+                }}
+
+                QRadioButton::indicator:checked {{
+                    background-color: {accent_primary};
+                    border-color: {accent_secondary};
+                }}
+
+                QRadioButton::indicator:hover {{
+                    border-color: {accent_primary};
+                }}
+
+                /* Status Bar */
+                QStatusBar {{
+                    background-color: {bg_tertiary};
+                    color: {text_secondary};
+                    border-top: 1px solid {border};
+                }}
+
+                /* Dialogs */
+                QDialog {{
+                    background-color: {bg_primary};
+                    color: {text_primary};
+                }}
+
+                /* Tab Widget */
+                QTabWidget::pane {{
+                    background-color: {panel_bg};
+                    border: 1px solid {border};
+                    border-radius: 4px;
+                }}
+
+                QTabBar::tab {{
+                    background-color: {button_normal};
+                    color: {button_text};
+                    padding: 8px 16px;
+                    margin: 2px;
+                    border: 1px solid {border};
+                    border-bottom: none;
+                    border-top-left-radius: 4px;
+                    border-top-right-radius: 4px;
+                }}
+
+                QTabBar::tab:selected {{
+                    background-color: {panel_bg};
+                    border-bottom: 2px solid {accent_primary};
+                }}
+
+                QTabBar::tab:hover {{
+                    background-color: {button_hover};
+                }}
+            """
+
+            # Apply combined stylesheet
+            self.setStyleSheet(stylesheet + mel_stylesheet)
+
+            # Apply titlebar colors
+            self._apply_titlebar_colors()
+        else:
+            # Fallback theme when AppSettings not available
+            self._apply_log_theme_styling()
+            self._apply_vertical_splitter_theme()
+            self._apply_main_splitter_theme()
+            self._apply_status_window_theme_styling()
+            self._apply_file_list_window_theme_styling()
+
+
+    def _apply_titlebar_colors(self): #vers 9
+        """Apply theme colors to titlebar elements - respects themed setting and detects light/dark"""
+        if not self.app_settings:
+            return
+
+        # Check if themed titlebar is enabled from MEL settings
+        use_themed = self.mel_settings.settings.get('use_themed_titlebar', True)
+
+        # Get theme colors
+        theme_colors = self._get_theme_colors("default")
+
+        if not use_themed:
+            # Hardcoded high-contrast colors for visibility
+            text_color = '#FFFFFF'
+            bg_color = '#2c3e50'
+            accent_color = '#3498db'
+            button_text_color = '#FFFFFF'
+            button_bg_color = '#3498db'
+            border_color = '#2c3e50'
+        else:
+            # Use theme colors
+            text_color = theme_colors.get('text_primary', '#000000')
+            bg_color = theme_colors.get('panel_bg', '#ffffff')
+            accent_color = theme_colors.get('accent', '#1976d2')
+            border_color = theme_colors.get('border', '#dee2e6')
+
+            # Detect if theme is light or dark based on background brightness
+            bg_rgb = tuple(int(bg_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
+            luminance = (0.299 * bg_rgb[0] + 0.587 * bg_rgb[1] + 0.114 * bg_rgb[2]) / 255
+
+            # Light theme (bright background): use dark buttons
+            # Dark theme (dark background): use light buttons
+            if luminance > 0.5:
+                # Light theme - use theme colors
+                button_text_color = theme_colors.get('text_primary', '#2c3e50')
+                button_bg_color = theme_colors.get('button_normal', '#e0e0e0')
+            else:
+                # Dark theme - use light colors
+                button_text_color = '#FFFFFF'
+                button_bg_color = theme_colors.get('button_normal', '#404040')
+
+        # Apply to title label
+        if hasattr(self, 'title_label'):
+            self.title_label.setStyleSheet(f"""
+                QLabel {{
+                    color: {text_color} !important;
+                    background-color: {bg_color} !important;
+                    font-weight: bold;
+                    padding: 5px;
+                }}
+            """)
+
+        # Create unified button style for ALL buttons
+        button_style = f"""
+            QPushButton {{
+                background-color: {button_bg_color} !important;
+                border: 1px solid {border_color} !important;
+                border-radius: 3px;
+                color: {button_text_color} !important;
+                padding: 2px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: {accent_color} !important;
+                border-color: {border_color} !important;
+                color: #FFFFFF !important;
+            }}
+            QPushButton:pressed {{
+                background-color: {self._adjust_brightness(accent_color, 0.85)} !important;
+            }}
+        """
+
+        # Apply to ALL titlebar buttons
+        titlebar_buttons = [
+            'settings_btn', 'scan_bios_btn', 'scan_roms_btn', 'save_btn', 'controller_btn',
+            'properties_btn', 'minimize_btn', 'maximize_btn', 'close_btn'
+        ]
+
+        for btn_name in titlebar_buttons:
+            if hasattr(self, btn_name):
+                btn = getattr(self, btn_name)
+                btn.setStyleSheet(button_style)
+
+        # Apply to sidebar control buttons
+        sidebar_buttons = ['vol_up_btn', 'vol_down_btn', 'screenshot_btn', 'record_btn']
+        for btn_name in sidebar_buttons:
+            if hasattr(self, btn_name):
+                btn = getattr(self, btn_name)
+                btn.setStyleSheet(button_style)
+
+        # Now style the bottom buttons with the same colors
+        self._style_control_buttons(button_bg_color, button_text_color, accent_color, border_color)
+
+
+    def _on_theme_changed(self): #vers 4
+        """Handle theme changes - refresh everything including icons"""
+        self._apply_theme()
+        self._apply_titlebar_colors()
+
+        # Refresh ALL icons with new theme color
+        icon_color = self._get_icon_color()
+
+        # Titlebar button icons
+        if hasattr(self, 'settings_btn'):
+            self.settings_btn.setIcon(SVGIconFactory.settings_icon(20, icon_color))
+        if hasattr(self, 'scan_bios_btn'):
+            self.scan_bios_btn.setIcon(SVGIconFactory.chip_icon(20, icon_color))
+        if hasattr(self, 'scan_roms_btn'):
+            self.scan_roms_btn.setIcon(SVGIconFactory.folder_icon(20, icon_color))
+        if hasattr(self, 'save_btn'):
+            self.save_btn.setIcon(SVGIconFactory.save_icon(20, icon_color))
+        if hasattr(self, 'controller_btn'):
+            self.controller_btn.setIcon(SVGIconFactory.controller_icon(20, icon_color))
+        if hasattr(self, 'info_btn'):
+            self.info_btn.setIcon(SVGIconFactory.info_icon(24, icon_color))
+        if hasattr(self, 'properties_btn'):
+            self.properties_btn.setIcon(SVGIconFactory.properties_icon(24, icon_color))
+
+        # Window control icons
+        if hasattr(self, 'minimize_btn'):
+            self.minimize_btn.setIcon(SVGIconFactory.minimize_icon(20, icon_color))
+        if hasattr(self, 'maximize_btn'):
+            self.maximize_btn.setIcon(SVGIconFactory.maximize_icon(20, icon_color))
+        if hasattr(self, 'close_btn'):
+            self.close_btn.setIcon(SVGIconFactory.close_icon(20, icon_color))
+
+        # Icon control panel icons
+        if hasattr(self, 'vol_up_btn'):
+            self.vol_up_btn.setIcon(SVGIconFactory.volume_up_icon(20, icon_color))
+        if hasattr(self, 'vol_down_btn'):
+            self.vol_down_btn.setIcon(SVGIconFactory.volume_down_icon(20, icon_color))
+        if hasattr(self, 'screenshot_btn'):
+            self.screenshot_btn.setIcon(SVGIconFactory.screenshot_icon(20, icon_color))
+
+
+    def _refresh_svg_icons(self): #vers 5
+        """Recreate all SVG icons with current theme colors"""
+
+        # Titlebar window controls
+        if hasattr(self, 'minimize_btn'):
+            self.minimize_btn.setIcon(SVGIconFactory.minimize_icon(20, icon_color))
+            self.minimize_btn.repaint()  # Force visual update
+        if hasattr(self, 'maximize_btn'):
+            self.maximize_btn.setIcon(SVGIconFactory.maximize_icon(20, icon_color))
+            self.maximize_btn.repaint()
+        if hasattr(self, 'close_btn'):
+            self.close_btn.setIcon(SVGIconFactory.close_icon(20, icon_color))
+            self.close_btn.repaint()
+        if hasattr(self, 'properties_btn'):
+            self.properties_btn.setIcon(SVGIconFactory.properties_icon(24, icon_color))
+            self.properties_btn.repaint()
+        if hasattr(self, 'info_btn'):
+            self.info_btn.setIcon(SVGIconFactory.info_icon(24, icon_color))
+            self.info_btn.repaint()
+
+
+        # Titlebar main buttons
+        if hasattr(self, 'scan_bios_btn'):
+            self.scan_bios_btn.setIcon(SVGIconFactory.chip_icon(20, icon_color))
+            self.scan_bios_btn.repaint()
+
+        if hasattr(self, 'scan_roms_btn'):
+            self.scan_roms_btn.setIcon(SVGIconFactory.folder_icon(16, icon_color))
+        if hasattr(self, 'save_btn'):
+            self.save_btn.setIcon(SVGIconFactory.save_icon(16, icon_color))
+        if hasattr(self, 'controller_btn'):
+            self.controller_btn.setIcon(SVGIconFactory.controller_icon(16, icon_color))
+        if hasattr(self, 'settings_btn'):
+            self.settings_btn.setIcon(SVGIconFactory.settings_icon(16, icon_color))
+
+
+        # Sidebar control buttons - FORCE REFRESH
+        if hasattr(self, 'vol_up_btn'):
+            self.vol_up_btn.setIcon(SVGIconFactory.volume_up_icon(20, icon_color))
+            self.vol_up_btn.update()  # Force Qt to redraw
+            self.vol_up_btn.repaint()
+        if hasattr(self, 'vol_down_btn'):
+            self.vol_down_btn.setIcon(SVGIconFactory.volume_down_icon(20, icon_color))
+            self.vol_down_btn.update()
+            self.vol_down_btn.repaint()
+        if hasattr(self, 'screenshot_btn'):
+            self.screenshot_btn.setIcon(SVGIconFactory.screenshot_icon(20, icon_color))
+            self.screenshot_btn.update()
+            self.screenshot_btn.repaint()
+        if hasattr(self, 'record_btn'):
+            self.record_btn.setIcon(SVGIconFactory.record_icon(20))
+            self.record_btn.update()
+            self.record_btn.repaint()
+
+        # Bottom panel buttons
+        if hasattr(self, 'display_widget'):
+            icon_color = self._get_icon_color()
+            if hasattr(self.display_widget, 'launch_btn'):
+                self.display_widget.launch_btn.setIcon(SVGIconFactory.launch_icon(20, icon_color))
+                self.display_widget.launch_btn.repaint()
+            if hasattr(self.display_widget, 'load_core_btn'):
+                self.display_widget.load_core_btn.setIcon(SVGIconFactory.folder_icon(20, icon_color))
+                self.display_widget.load_core_btn.repaint()
+            if hasattr(self.display_widget, 'gameart_btn'):
+                self.display_widget.gameart_btn.setIcon(SVGIconFactory.paint_icon(20, icon_color))
+                self.display_widget.gameart_btn.repaint()
+            if hasattr(self.display_widget, 'manage_btn'):
+                self.display_widget.manage_btn.setIcon(SVGIconFactory.manage_icon(20, icon_color))
+                self.display_widget.manage_btn.repaint()
+            if hasattr(self.display_widget, 'ports_btn'):
+                self.display_widget.ports_btn.setIcon(SVGIconFactory.package_icon(20, icon_color))
+                self.display_widget.ports_btn.repaint()
+            if hasattr(self.display_widget, 'stop_btn'):
+                self.display_widget.stop_btn.setIcon(SVGIconFactory.stop_icon(20, icon_color))
+                self.display_widget.stop_btn.repaint()
+
+
 
 # - Panel Creation
 
@@ -687,6 +1712,8 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         self.info_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         #self.info_btn.setMinimumHeight(30)
         self.info_btn.setToolTip("Information")
+        self.info_btn.clicked.connect(self._show_about_dialog)
+        self.layout.addWidget(self.info_btn)
         self.info_btn.setStyleSheet("""
             QPushButton {
                 font-weight: bold;
@@ -834,8 +1861,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         return panel
 
     def _create_middle_panel(self): #ver 1
-
-        panel = QGroupBox("")
+        panel = QGroupBox()
         panel.setStyleSheet("""
             QGroupBox {
                 font-weight: bold;
@@ -846,16 +1872,8 @@ class ResBioEvilWorkshop(QWidget): #ver 1
                 padding-top: 10px;
                 background-color: #2b2b2b;
             }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                subcontrol-position: top right;
-                right: 20px;
-                padding: 0 5px;
-                color: #e0e0e0;
-            }
         """)
         layout = QVBoxLayout(panel)
-        layout.setSpacing(self.panelspacing)
         self.middle_list = QTableWidget()
         self.middle_list.setColumnCount(2)
         self.middle_list.setHorizontalHeaderLabels(["Previewp", "Details"])
@@ -863,7 +1881,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         self.middle_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.middle_list.setAlternatingRowColors(True)
         self.middle_list.setIconSize(QSize(self.iconsizex, self.iconsizey))
-        self.middle_list.setColumnWidth(0, 80)
+        self.middle_list.setColumnWidth(0, 100)
         self.middle_list.horizontalHeader().setStretchLastSection(True)
         layout.addWidget(self.middle_list)
 
@@ -883,17 +1901,70 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         transform_panel = self._create_transform_panel()
         top_layout.addWidget(transform_panel, stretch=1)
 
-        # Preview area (center) - 3D Viewport
-        top_layout = QHBoxLayout()
-        top_label = QLabel("Display:")
-        top_label.setFont(self.panel_font)
-        top_layout.addWidget(top_label, stretch=2)
 
-        # Preview controls (right side, vertical)
+        # PREVIEW/DISPLAY AREA (Multi-view for text and game assets)
+        display_group = QGroupBox("")
+        display_group.setFont(self.title_font)
+        display_layout = QVBoxLayout(display_group)
+        display_layout.setContentsMargins(5, 5, 5, 5)
 
-        self.preview_controls = self._create_preview_controls()
-        top_layout.addWidget(self.preview_controls, stretch=0)
-        main_layout.addLayout(top_layout, stretch=1)
+        # Display mode selector (top)
+        mode_layout = QHBoxLayout()
+        mode_label = QLabel("View:")
+        mode_label.setFont(self.panel_font)
+        mode_layout.addWidget(mode_label)
+
+        self.display_mode_combo = QComboBox()
+        self.display_mode_combo.setFont(self.panel_font)
+        self.display_mode_combo.addItems(["Text", "3D Model", "Texture", "Collision", "Info"])
+        self.display_mode_combo.setMaximumWidth(120)
+        self.display_mode_combo.currentTextChanged.connect(self._on_display_mode_changed)
+        mode_layout.addWidget(self.display_mode_combo)
+        mode_layout.addStretch()
+
+        display_layout.addLayout(mode_layout)
+
+        # Multi-view display area
+        self.display_stack = QStackedWidget()
+
+        # === PAGE 0: Text Display (for research, docs, etc) ===
+        text_display = QTextEdit()
+        text_display.setReadOnly(True)
+        text_display.setFont(QFont("Courier", 9))
+        self.text_display = text_display
+        self.display_stack.addWidget(text_display)
+
+        # === PAGE 1: 3D Model Viewport (placeholder for now) ===
+        model_display = QLabel("3D Model Viewer\n(Coming soon)")
+        model_display.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        model_display.setStyleSheet("QLabel { background-color: #1a1a1a; color: #666; }")
+        self.model_display = model_display
+        self.display_stack.addWidget(model_display)
+
+        # === PAGE 2: Texture Viewer (placeholder) ===
+        texture_display = QLabel("Texture Viewer\n(Coming soon)")
+        texture_display.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        texture_display.setStyleSheet("QLabel { background-color: #1a1a1a; color: #666; }")
+        self.texture_display = texture_display
+        self.display_stack.addWidget(texture_display)
+
+        # === PAGE 3: Collision Viewer (placeholder) ===
+        collision_display = QLabel("Collision Viewer\n(Coming soon)")
+        collision_display.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        collision_display.setStyleSheet("QLabel { background-color: #1a1a1a; color: #666; }")
+        self.collision_display = collision_display
+        self.display_stack.addWidget(collision_display)
+
+        # === PAGE 4: Info/Properties ===
+        info_display = QLabel("Information Panel")
+        info_display.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        info_display.setStyleSheet("QLabel { background-color: #1a1a1a; color: #666; }")
+        self.info_display = info_display
+        self.display_stack.addWidget(info_display)
+
+        display_layout.addWidget(self.display_stack, stretch=1)
+
+        main_layout.addWidget(display_group, stretch=1)
 
         # Information group below
         info_group = QGroupBox("")
@@ -1402,6 +2473,50 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             #self.status_ojs_info.setText(f"Object: {obj_count} | obj: {size_kb:.1f} KB")
 
         return status_bar
+
+
+    def _on_display_mode_changed(self, mode): #vers 1
+        """Handle display mode change"""
+        modes = {
+            "Text": 0,
+            "3D Model": 1,
+            "Texture": 2,
+            "Collision": 3,
+            "Info": 4
+        }
+        if mode in modes:
+            self.display_stack.setCurrentIndex(modes[mode])
+            img_debugger.debug(f"Display mode changed to: {mode}")
+
+    def show_research_content(self, content_text): #vers 1
+        """Display research/text content in text viewer"""
+        if hasattr(self, 'text_display'):
+            self.text_display.setText(content_text)
+            self.display_mode_combo.setCurrentIndex(0)  # Switch to Text mode
+            img_debugger.debug("Research content displayed")
+
+    def show_3d_model(self, model_data): #vers 1
+        """Display 3D model (placeholder for future implementation)"""
+        if hasattr(self, 'model_display'):
+            self.display_mode_combo.setCurrentIndex(1)  # Switch to 3D mode
+            img_debugger.debug("Model viewer activated")
+
+    def show_texture(self, texture_data): #vers 1
+        """Display texture (placeholder for future implementation)"""
+        if hasattr(self, 'texture_display'):
+            self.display_mode_combo.setCurrentIndex(2)  # Switch to Texture mode
+            img_debugger.debug("Texture viewer activated")
+
+    def show_collision(self, collision_data): #vers 1
+        """Display collision data (placeholder for future implementation)"""
+        if hasattr(self, 'collision_display'):
+            self.display_mode_combo.setCurrentIndex(3)  # Switch to Collision mode
+            img_debugger.debug("Collision viewer activated")
+
+    def clear_display(self): #vers 1
+        """Clear all display content"""
+        if hasattr(self, 'text_display'):
+            self.text_display.setText("")
 
 # - Fonts settings
 
@@ -2793,7 +3908,520 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             self.drag_btn.setVisible(not self.is_docked)
 
 
+    def _show_about_dialog(self): #vers 1
+        """Show about/info dialog for ResBio-Evil-Workshop"""
+        from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QTabWidget, QWidget, QGroupBox, QFormLayout, QSpinBox, QComboBox, QSlider, QLabel, QCheckBox, QFontComboBox, QTextBrowser)
+        from PyQt6.QtCore import Qt
+        from PyQt6.QtGui import QFont
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("About ResBio-Evil-Workshop")
+        dialog.setMinimumSize(700, 600)
+
+        layout = QVBoxLayout()
+
+        # Title
+        title = QLabel("ResBio-Evil-Workshop 1.0")
+        title_font = QFont(self.title_font)
+        title_font.setPointSize(16)
+        title_font.setBold(True)
+        title.setFont(title_font)
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(title)
+
+        # Author info
+        author = QLabel("Created by X-Seti")
+        author.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        author_font = QFont(self.panel_font)
+        author_font.setPointSize(12)
+        author.setFont(author_font)
+        layout.addWidget(author)
+
+        # Year
+        year = QLabel("© 2025")
+        year.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(year)
+
+        layout.addSpacing(20)
+
+        # Info browser
+        info_browser = QTextBrowser()
+        info_browser.setOpenExternalLinks(True)
+
+        info_html = """
+        <h3>About This Tool</h3>
+        <p>ResBio-Evil-Workshop is a comprehensive Resident Evil file format editor and room viewer
+        for PS1/PC versions of RE1, RE2, and RE3. It provides tools for analyzing and editing
+        game assets including rooms, models, textures, and collision data.</p>
+
+        <h3>Key Features</h3>
+        <ul>
+            <li><b>File Format Support</b>
+                <ul>
+                    <li>RDT (Room Description Table) - Room geometry and data</li>
+                    <li>EMD (3D Models) - Character and object models</li>
+                    <li>MD1 (3D Models) - RE2/RE3 model format</li>
+                    <li>TIM (Textures) - PS1 texture format</li>
+                    <li>SCA (Collision) - Collision boundaries</li>
+                    <li>SCD (Scripts) - Room scripts and logic</li>
+                </ul>
+            </li>
+            <li><b>Multi-Version Support</b> - RE1, RE2, and RE3 (PS1 and PC versions)</li>
+            <li><b>Research Database</b>
+                <ul>
+                    <li>Store and organize file format findings</li>
+                    <li>Tag-based categorization</li>
+                    <li>Full-text search across research entries</li>
+                    <li>Export research to markdown</li>
+                </ul>
+            </li>
+            <li><b>Multi-View Display Panel</b>
+                <ul>
+                    <li>Text viewer for documentation and research</li>
+                    <li>3D Model viewer (placeholder for implementation)</li>
+                    <li>Texture viewer (placeholder for implementation)</li>
+                    <li>Collision visualizer (placeholder for implementation)</li>
+                    <li>Info panel for properties</li>
+                </ul>
+            </li>
+            <li><b>Theme System</b>
+                <ul>
+                    <li>Light/dark theme detection and adaptation</li>
+                    <li>Theme-friendly styling throughout</li>
+                    <li>20+ bundled themes</li>
+                    <li>Custom theme support</li>
+                </ul>
+            </li>
+            <li><b>Customizable Interface</b>
+                <ul>
+                    <li>Toolbar with quick access buttons</li>
+                    <li>Multi-panel layout (left, middle, right)</li>
+                    <li>SVG-based icons</li>
+                    <li>Resizable panels</li>
+                </ul>
+            </li>
+        </ul>
+
+        <h3>Technical Details</h3>
+        <ul>
+            <li><b>Framework:</b> PyQt6</li>
+            <li><b>Architecture:</b> Modular design with separated concerns</li>
+            <li><b>Graphics:</b> SVG-based scalable icons</li>
+            <li><b>Theme Engine:</b> App-System-Settings integration</li>
+            <li><b>Platform:</b> Cross-platform (Linux, Windows, macOS)</li>
+            <li><b>Reference Implementation:</b> reevengi-tools (GitHub)</li>
+        </ul>
+
+        <h3>Project Structure</h3>
+        <ul>
+            <li><b>core/</b> - Core database and file parsing</li>
+            <li><b>components/</b> - GUI components and editors</li>
+            <li><b>methods/</b> - Shared utility methods</li>
+            <li><b>depends/</b> - Dependencies and helpers</li>
+            <li><b>utils/</b> - Settings and theme management</li>
+            <li><b>themes/</b> - Theme JSON files</li>
+        </ul>
+
+        <h3>Development Status</h3>
+        <ul>
+            <li><b>Phase 1:</b> File format research and documentation ✓</li>
+            <li><b>Phase 2:</b> RDT parser implementation (in progress)</li>
+            <li><b>Phase 3:</b> EMD model parser</li>
+            <li><b>Phase 4:</b> TIM texture support</li>
+            <li><b>Phase 5:</b> 3D visualization and collision display</li>
+        </ul>
+
+        <h3>Research & References</h3>
+        <ul>
+            <li><b>reevengi-tools</b> - Open source RE file format tools
+                <ul>
+                    <li><a href="https://github.com/pmandin/reevengi-tools">GitHub Repository</a></li>
+                    <li>RDT/EMD/TIM format specifications</li>
+                </ul>
+            </li>
+            <li><b>RE Modding Community</b> - Forums and wikis with format documentation</li>
+        </ul>
+
+        <h3>GitHub Repository</h3>
+        <p><a href="https://github.com/X-Seti/Resbio-Evil-Workshop">
+        https://github.com/X-Seti/Resbio-Evil-Workshop</a></p>
+
+        <h3>Code Organization</h3>
+        <p>This project follows strict organizational rules:</p>
+        <ul>
+            <li>File headers with "X-Seti - [Date] 2025" format</li>
+            <li>Alphabetical method listings with version tracking</li>
+            <li>No "Enhanced/Fixed/Improved" naming patterns</li>
+            <li>Organized folder structure by function</li>
+            <li>SVG icons only (no emojis)</li>
+            <li>No duplicate functions across files</li>
+            <li>Shared functions in methods/ folder</li>
+        </ul>
+
+        <br>
+        <p><i>Built with attention to detail, commitment to quality code, and passion for RE file formats.</i></p>
+        """
+
+        info_browser.setHtml(info_html)
+        layout.addWidget(info_browser)
+
+        # Close button
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dialog.accept)
+        layout.addWidget(close_btn)
+
+        dialog.setLayout(layout)
+
+        dialog.exec()
+
 # - GUI button update
+
+    def _show_workshop_settings(self): #vers 1 < moved from TXD workshop
+        """Show complete workshop settings dialog"""
+        from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QTabWidget, QWidget, QGroupBox, QFormLayout, QSpinBox, QComboBox, QSlider, QLabel, QCheckBox, QFontComboBox)
+        from PyQt6.QtCore import Qt
+        from PyQt6.QtGui import QFont
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(App_name + " Settings")
+        dialog.setMinimumWidth(650)
+        dialog.setMinimumHeight(550)
+
+        layout = QVBoxLayout(dialog)
+
+        # Create tabs
+        tabs = QTabWidget()
+
+        # TAB 1: FONTS (FIRST TAB)
+
+        fonts_tab = QWidget()
+        fonts_layout = QVBoxLayout(fonts_tab)
+
+        # Default Font
+        default_font_group = QGroupBox("Default Font")
+        default_font_layout = QHBoxLayout()
+
+        default_font_combo = QFontComboBox()
+        default_font_combo.setCurrentFont(self.font())
+        default_font_layout.addWidget(default_font_combo)
+
+        default_font_size = QSpinBox()
+        default_font_size.setRange(8, 24)
+        default_font_size.setValue(self.font().pointSize())
+        default_font_size.setSuffix(" pt")
+        default_font_size.setFixedWidth(80)
+        default_font_layout.addWidget(default_font_size)
+
+        default_font_group.setLayout(default_font_layout)
+        fonts_layout.addWidget(default_font_group)
+
+        # Title Font
+        title_font_group = QGroupBox("Title Font")
+        title_font_layout = QHBoxLayout()
+
+        title_font_combo = QFontComboBox()
+        if hasattr(self, 'title_font'):
+            title_font_combo.setCurrentFont(self.title_font)
+        else:
+            title_font_combo.setCurrentFont(QFont("Arial", 14))
+        title_font_layout.addWidget(title_font_combo)
+
+        title_font_size = QSpinBox()
+        title_font_size.setRange(10, 32)
+        title_font_size.setValue(getattr(self, 'title_font', QFont("Arial", 14)).pointSize())
+        title_font_size.setSuffix(" pt")
+        title_font_size.setFixedWidth(80)
+        title_font_layout.addWidget(title_font_size)
+
+        title_font_group.setLayout(title_font_layout)
+        fonts_layout.addWidget(title_font_group)
+
+        # Panel Font
+        panel_font_group = QGroupBox("Panel Headers Font")
+        panel_font_layout = QHBoxLayout()
+
+        panel_font_combo = QFontComboBox()
+        if hasattr(self, 'panel_font'):
+            panel_font_combo.setCurrentFont(self.panel_font)
+        else:
+            panel_font_combo.setCurrentFont(QFont("Arial", 10))
+        panel_font_layout.addWidget(panel_font_combo)
+
+        panel_font_size = QSpinBox()
+        panel_font_size.setRange(8, 18)
+        panel_font_size.setValue(getattr(self, 'panel_font', QFont("Arial", 10)).pointSize())
+        panel_font_size.setSuffix(" pt")
+        panel_font_size.setFixedWidth(80)
+        panel_font_layout.addWidget(panel_font_size)
+
+        panel_font_group.setLayout(panel_font_layout)
+        fonts_layout.addWidget(panel_font_group)
+
+        # Button Font
+        button_font_group = QGroupBox("Button Font")
+        button_font_layout = QHBoxLayout()
+
+        button_font_combo = QFontComboBox()
+        if hasattr(self, 'button_font'):
+            button_font_combo.setCurrentFont(self.button_font)
+        else:
+            button_font_combo.setCurrentFont(QFont("Arial", 10))
+        button_font_layout.addWidget(button_font_combo)
+
+        button_font_size = QSpinBox()
+        button_font_size.setRange(8, 16)
+        button_font_size.setValue(getattr(self, 'button_font', QFont("Arial", 10)).pointSize())
+        button_font_size.setSuffix(" pt")
+        button_font_size.setFixedWidth(80)
+        button_font_layout.addWidget(button_font_size)
+
+        button_font_group.setLayout(button_font_layout)
+        fonts_layout.addWidget(button_font_group)
+
+        # Info Bar Font
+        infobar_font_group = QGroupBox("Info Bar Font")
+        infobar_font_layout = QHBoxLayout()
+
+        infobar_font_combo = QFontComboBox()
+        if hasattr(self, 'infobar_font'):
+            infobar_font_combo.setCurrentFont(self.infobar_font)
+        else:
+            infobar_font_combo.setCurrentFont(QFont("Courier New", 9))
+        infobar_font_layout.addWidget(infobar_font_combo)
+
+        infobar_font_size = QSpinBox()
+        infobar_font_size.setRange(7, 14)
+        infobar_font_size.setValue(getattr(self, 'infobar_font', QFont("Courier New", 9)).pointSize())
+        infobar_font_size.setSuffix(" pt")
+        infobar_font_size.setFixedWidth(80)
+        infobar_font_layout.addWidget(infobar_font_size)
+
+        infobar_font_group.setLayout(infobar_font_layout)
+        fonts_layout.addWidget(infobar_font_group)
+
+        fonts_layout.addStretch()
+        tabs.addTab(fonts_tab, "Fonts")
+
+        # TAB 2: DISPLAY SETTINGS
+
+        display_tab = QWidget()
+        display_layout = QVBoxLayout(display_tab)
+
+        # Button display mode
+        button_group = QGroupBox("Button Display Mode")
+        button_layout = QVBoxLayout()
+
+        button_mode_combo = QComboBox()
+        button_mode_combo.addItems(["Icons + Text", "Icons Only", "Text Only"])
+        current_mode = getattr(self, 'button_display_mode', 'both')
+        mode_map = {'both': 0, 'icons': 1, 'text': 2}
+        button_mode_combo.setCurrentIndex(mode_map.get(current_mode, 0))
+        button_layout.addWidget(button_mode_combo)
+
+        button_hint = QLabel("Changes how toolbar buttons are displayed")
+        button_hint.setStyleSheet("color: #888; font-style: italic;")
+        button_layout.addWidget(button_hint)
+
+        button_group.setLayout(button_layout)
+        display_layout.addWidget(button_group)
+
+        # Table display
+        table_group = QGroupBox("Texture List Display")
+        table_layout = QVBoxLayout()
+
+        show_thumbnails = QCheckBox("Show texture thumbnails")
+        show_thumbnails.setChecked(True)
+        table_layout.addWidget(show_thumbnails)
+
+        show_warnings = QCheckBox("Show warning icons for suspicious textures")
+        show_warnings.setChecked(True)
+        show_warnings.setToolTip("Shows icon if normal and alpha appear identical")
+        table_layout.addWidget(show_warnings)
+
+        table_group.setLayout(table_layout)
+        display_layout.addWidget(table_group)
+
+        display_layout.addStretch()
+        tabs.addTab(display_tab, "Display")
+
+
+
+        # TAB 3: placeholder
+        # TAB 4: PERFORMANCE
+
+        perf_tab = QWidget()
+        perf_layout = QVBoxLayout(perf_tab)
+
+        perf_group = QGroupBox("Performance Settings")
+        perf_form = QFormLayout()
+
+        preview_quality = QComboBox()
+        preview_quality.addItems(["Low (Fast)", "Medium", "High (Slow)"])
+        preview_quality.setCurrentIndex(1)
+        perf_form.addRow("Preview Quality:", preview_quality)
+
+        thumb_size = QSpinBox()
+        thumb_size.setRange(32, 128)
+        thumb_size.setValue(64)
+        thumb_size.setSuffix(" px")
+        perf_form.addRow("Thumbnail Size:", thumb_size)
+
+        perf_group.setLayout(perf_form)
+        perf_layout.addWidget(perf_group)
+
+        # Caching
+        cache_group = QGroupBox("Caching")
+        cache_layout = QVBoxLayout()
+
+        enable_cache = QCheckBox("Enable texture preview caching")
+        enable_cache.setChecked(True)
+        cache_layout.addWidget(enable_cache)
+
+        cache_hint = QLabel("Caching improves performance but uses more memory")
+        cache_hint.setStyleSheet("color: #888; font-style: italic;")
+        cache_layout.addWidget(cache_hint)
+
+        cache_group.setLayout(cache_layout)
+        perf_layout.addWidget(cache_group)
+
+        perf_layout.addStretch()
+        tabs.addTab(perf_tab, "Performance")
+
+        # TAB 5: PREVIEW SETTINGS (LAST TAB)
+
+        preview_tab = QWidget()
+        preview_layout = QVBoxLayout(preview_tab)
+
+        # Zoom Settings
+        zoom_group = QGroupBox("Zoom Settings")
+        zoom_form = QFormLayout()
+
+        zoom_spin = QSpinBox()
+        zoom_spin.setRange(10, 500)
+        zoom_spin.setValue(int(getattr(self, 'zoom_level', 1.0) * 100))
+        zoom_spin.setSuffix("%")
+        zoom_form.addRow("Default Zoom:", zoom_spin)
+
+        zoom_group.setLayout(zoom_form)
+        preview_layout.addWidget(zoom_group)
+
+        # Background Settings
+        bg_group = QGroupBox("Background Settings")
+        bg_layout = QVBoxLayout()
+
+        # Background mode
+        bg_mode_layout = QFormLayout()
+        bg_mode_combo = QComboBox()
+        bg_mode_combo.addItems(["Solid Color", "Checkerboard", "Grid"])
+        current_bg_mode = getattr(self, 'background_mode', 'solid')
+        mode_idx = {"solid": 0, "checkerboard": 1, "checker": 1, "grid": 2}.get(current_bg_mode, 0)
+
+        bg_mode_combo.setCurrentIndex(mode_idx)
+        bg_mode_layout.addRow("Background Mode:", bg_mode_combo)
+        bg_layout.addLayout(bg_mode_layout)
+
+        bg_layout.addSpacing(10)
+
+        # Checkerboard size
+        cb_label = QLabel("Checkerboard Size:")
+        bg_layout.addWidget(cb_label)
+
+        cb_layout = QHBoxLayout()
+        cb_slider = QSlider(Qt.Orientation.Horizontal)
+        cb_slider.setMinimum(4)
+        cb_slider.setMaximum(64)
+        cb_slider.setValue(getattr(self, '_checkerboard_size', 16))
+        cb_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        cb_slider.setTickInterval(8)
+        cb_layout.addWidget(cb_slider)
+
+        cb_spin = QSpinBox()
+        cb_spin.setMinimum(4)
+        cb_spin.setMaximum(64)
+        cb_spin.setValue(getattr(self, '_checkerboard_size', 16))
+        cb_spin.setSuffix(" px")
+        cb_spin.setFixedWidth(80)
+        cb_layout.addWidget(cb_spin)
+
+        bg_layout.addLayout(cb_layout)
+
+        # Connect checkerboard controls
+        #cb_slider.valueChanged.connect(cb_spin.setValue)
+        #cb_spin.valueChanged.connect(cb_slider.setValue)
+
+        # Hint
+        cb_hint = QLabel("Smaller = tighter pattern, larger = bigger squares")
+        cb_hint.setStyleSheet("color: #888; font-style: italic; font-size: 10px;")
+        bg_layout.addWidget(cb_hint)
+
+        bg_group.setLayout(bg_layout)
+        preview_layout.addWidget(bg_group)
+
+        # Overlay Settings
+        overlay_group = QGroupBox("Overlay View Settings")
+        overlay_layout = QVBoxLayout()
+
+        overlay_label = QLabel("Overlay Opacity (Normal over Alpha):")
+        overlay_layout.addWidget(overlay_label)
+
+        opacity_layout = QHBoxLayout()
+        opacity_slider = QSlider(Qt.Orientation.Horizontal)
+        opacity_slider.setMinimum(0)
+        opacity_slider.setMaximum(100)
+        opacity_slider.setValue(getattr(self, '_overlay_opacity', 50))
+        opacity_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        opacity_slider.setTickInterval(10)
+        opacity_layout.addWidget(opacity_slider)
+
+        opacity_spin = QSpinBox()
+        opacity_spin.setMinimum(0)
+        opacity_spin.setMaximum(100)
+        opacity_spin.setValue(getattr(self, '_overlay_opacity', 50))
+        opacity_spin.setSuffix(" %")
+        opacity_spin.setFixedWidth(80)
+        opacity_layout.addWidget(opacity_spin)
+
+        overlay_layout.addLayout(opacity_layout)
+
+        # Connect opacity controls
+        #opacity_slider.valueChanged.connect(opacity_spin.setValue)
+        #opacity_spin.valueChanged.connect(opacity_slider.setValue)
+
+        # Hint
+        opacity_hint = QLabel("0")
+        opacity_hint.setStyleSheet("color: #888; font-style: italic; font-size: 10px;")
+        overlay_layout.addWidget(opacity_hint)
+
+        overlay_group.setLayout(overlay_layout)
+        preview_layout.addWidget(overlay_group)
+
+        preview_layout.addStretch()
+        tabs.addTab(preview_tab, "Preview")
+
+        # Add tabs to dialog
+        layout.addWidget(tabs)
+
+        # BUTTONS
+
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+
+        # Apply button
+        apply_btn = QPushButton("Apply Settings")
+        apply_btn.setStyleSheet("""
+            QPushButton {
+                background: #0078d4;
+                color: white;
+                padding: 10px 24px;
+                font-weight: bold;
+                border-radius: 4px;
+                font-size: 13px;
+            }
+            QPushButton:hover {
+                background: #1984d8;
+            }
+        """)
+
 
     def _update_all_buttons(self): #vers 4
         # Update all buttons to match display mode
@@ -2812,39 +4440,422 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         return '#ffffff'
 
 
-    def _apply_theme(self): #vers 2
-        """Apply theme from main window"""
-        try:
-            if self.main_window and hasattr(self.main_window, 'app_settings'):
-                # Get current theme
-                theme_name = self.main_window.app_settings.current_settings.get('theme', 'IMG_Factory')
-                stylesheet = self.main_window.app_settings.get_stylesheet()
-
-                # Apply to App
-                self.setStyleSheet(stylesheet)
-
-                # Force update
-                self.update()
-
-                if hasattr(self.main_window, 'log_message'):
-                    self.main_window.log_message(f"theme applied: {theme_name}")
-            else:
-                # Fallback dark theme
-                self.setStyleSheet("""
-                    QWidget {
-                        background-color: #2b2b2b;
-                        color: #e0e0e0;
-                    }
-                    QListWidget, QTableWidget, QTextEdit {
-                        background-color: #1e1e1e;
-                        border: 1px solid #3a3a3a;
-                    }
-                """)
-        except Exception as e:
-            print(f"Theme application error: {e}")
 
 
-    def _apply_settings(self, dialog): #vers 5
+
+    def _show_workshop_settings(self): #vers 1 < moved from TXD workshop
+        """Show complete workshop settings dialog"""
+        from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QTabWidget, QWidget, QGroupBox, QFormLayout, QSpinBox, QComboBox, QSlider, QLabel, QCheckBox, QFontComboBox)
+        from PyQt6.QtCore import Qt
+        from PyQt6.QtGui import QFont
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(App_name + " Settings")
+        dialog.setMinimumWidth(650)
+        dialog.setMinimumHeight(550)
+
+        layout = QVBoxLayout(dialog)
+
+        # Create tabs
+        tabs = QTabWidget()
+
+        # TAB 1: FONTS (FIRST TAB)
+
+        fonts_tab = QWidget()
+        fonts_layout = QVBoxLayout(fonts_tab)
+
+        # Default Font
+        default_font_group = QGroupBox("Default Font")
+        default_font_layout = QHBoxLayout()
+
+        default_font_combo = QFontComboBox()
+        default_font_combo.setCurrentFont(self.font())
+        default_font_layout.addWidget(default_font_combo)
+
+        default_font_size = QSpinBox()
+        default_font_size.setRange(8, 24)
+        default_font_size.setValue(self.font().pointSize())
+        default_font_size.setSuffix(" pt")
+        default_font_size.setFixedWidth(80)
+        default_font_layout.addWidget(default_font_size)
+
+        default_font_group.setLayout(default_font_layout)
+        fonts_layout.addWidget(default_font_group)
+
+        # Title Font
+        title_font_group = QGroupBox("Title Font")
+        title_font_layout = QHBoxLayout()
+
+        title_font_combo = QFontComboBox()
+        if hasattr(self, 'title_font'):
+            title_font_combo.setCurrentFont(self.title_font)
+        else:
+            title_font_combo.setCurrentFont(QFont("Arial", 14))
+        title_font_layout.addWidget(title_font_combo)
+
+        title_font_size = QSpinBox()
+        title_font_size.setRange(10, 32)
+        title_font_size.setValue(getattr(self, 'title_font', QFont("Arial", 14)).pointSize())
+        title_font_size.setSuffix(" pt")
+        title_font_size.setFixedWidth(80)
+        title_font_layout.addWidget(title_font_size)
+
+        title_font_group.setLayout(title_font_layout)
+        fonts_layout.addWidget(title_font_group)
+
+        # Panel Font
+        panel_font_group = QGroupBox("Panel Headers Font")
+        panel_font_layout = QHBoxLayout()
+
+        panel_font_combo = QFontComboBox()
+        if hasattr(self, 'panel_font'):
+            panel_font_combo.setCurrentFont(self.panel_font)
+        else:
+            panel_font_combo.setCurrentFont(QFont("Arial", 10))
+        panel_font_layout.addWidget(panel_font_combo)
+
+        panel_font_size = QSpinBox()
+        panel_font_size.setRange(8, 18)
+        panel_font_size.setValue(getattr(self, 'panel_font', QFont("Arial", 10)).pointSize())
+        panel_font_size.setSuffix(" pt")
+        panel_font_size.setFixedWidth(80)
+        panel_font_layout.addWidget(panel_font_size)
+
+        panel_font_group.setLayout(panel_font_layout)
+        fonts_layout.addWidget(panel_font_group)
+
+        # Button Font
+        button_font_group = QGroupBox("Button Font")
+        button_font_layout = QHBoxLayout()
+
+        button_font_combo = QFontComboBox()
+        if hasattr(self, 'button_font'):
+            button_font_combo.setCurrentFont(self.button_font)
+        else:
+            button_font_combo.setCurrentFont(QFont("Arial", 10))
+        button_font_layout.addWidget(button_font_combo)
+
+        button_font_size = QSpinBox()
+        button_font_size.setRange(8, 16)
+        button_font_size.setValue(getattr(self, 'button_font', QFont("Arial", 10)).pointSize())
+        button_font_size.setSuffix(" pt")
+        button_font_size.setFixedWidth(80)
+        button_font_layout.addWidget(button_font_size)
+
+        button_font_group.setLayout(button_font_layout)
+        fonts_layout.addWidget(button_font_group)
+
+        # Info Bar Font
+        infobar_font_group = QGroupBox("Info Bar Font")
+        infobar_font_layout = QHBoxLayout()
+
+        infobar_font_combo = QFontComboBox()
+        if hasattr(self, 'infobar_font'):
+            infobar_font_combo.setCurrentFont(self.infobar_font)
+        else:
+            infobar_font_combo.setCurrentFont(QFont("Courier New", 9))
+        infobar_font_layout.addWidget(infobar_font_combo)
+
+        infobar_font_size = QSpinBox()
+        infobar_font_size.setRange(7, 14)
+        infobar_font_size.setValue(getattr(self, 'infobar_font', QFont("Courier New", 9)).pointSize())
+        infobar_font_size.setSuffix(" pt")
+        infobar_font_size.setFixedWidth(80)
+        infobar_font_layout.addWidget(infobar_font_size)
+
+        infobar_font_group.setLayout(infobar_font_layout)
+        fonts_layout.addWidget(infobar_font_group)
+
+        fonts_layout.addStretch()
+        tabs.addTab(fonts_tab, "Fonts")
+
+        # TAB 2: DISPLAY SETTINGS
+
+        display_tab = QWidget()
+        display_layout = QVBoxLayout(display_tab)
+
+        # Button display mode
+        button_group = QGroupBox("Button Display Mode")
+        button_layout = QVBoxLayout()
+
+        button_mode_combo = QComboBox()
+        button_mode_combo.addItems(["Icons + Text", "Icons Only", "Text Only"])
+        current_mode = getattr(self, 'button_display_mode', 'both')
+        mode_map = {'both': 0, 'icons': 1, 'text': 2}
+        button_mode_combo.setCurrentIndex(mode_map.get(current_mode, 0))
+        button_layout.addWidget(button_mode_combo)
+
+        button_hint = QLabel("Changes how toolbar buttons are displayed")
+        button_hint.setStyleSheet("color: #888; font-style: italic;")
+        button_layout.addWidget(button_hint)
+
+        button_group.setLayout(button_layout)
+        display_layout.addWidget(button_group)
+
+        # Table display
+        table_group = QGroupBox("Texture List Display")
+        table_layout = QVBoxLayout()
+
+        show_thumbnails = QCheckBox("Show texture thumbnails")
+        show_thumbnails.setChecked(True)
+        table_layout.addWidget(show_thumbnails)
+
+        show_warnings = QCheckBox("Show warning icons for suspicious textures")
+        show_warnings.setChecked(True)
+        show_warnings.setToolTip("Shows icon if normal and alpha appear identical")
+        table_layout.addWidget(show_warnings)
+
+        table_group.setLayout(table_layout)
+        display_layout.addWidget(table_group)
+
+        display_layout.addStretch()
+        tabs.addTab(display_tab, "Display")
+
+
+        # TAB 3: placeholder
+        # TAB 4: PERFORMANCE
+
+        perf_tab = QWidget()
+        perf_layout = QVBoxLayout(perf_tab)
+
+        perf_group = QGroupBox("Performance Settings")
+        perf_form = QFormLayout()
+
+        preview_quality = QComboBox()
+        preview_quality.addItems(["Low (Fast)", "Medium", "High (Slow)"])
+        preview_quality.setCurrentIndex(1)
+        perf_form.addRow("Preview Quality:", preview_quality)
+
+        thumb_size = QSpinBox()
+        thumb_size.setRange(32, 128)
+        thumb_size.setValue(64)
+        thumb_size.setSuffix(" px")
+        perf_form.addRow("Thumbnail Size:", thumb_size)
+
+        perf_group.setLayout(perf_form)
+        perf_layout.addWidget(perf_group)
+
+        # Caching
+        cache_group = QGroupBox("Caching")
+        cache_layout = QVBoxLayout()
+
+        enable_cache = QCheckBox("Enable texture preview caching")
+        enable_cache.setChecked(True)
+        cache_layout.addWidget(enable_cache)
+
+        cache_hint = QLabel("Caching improves performance but uses more memory")
+        cache_hint.setStyleSheet("color: #888; font-style: italic;")
+        cache_layout.addWidget(cache_hint)
+
+        cache_group.setLayout(cache_layout)
+        perf_layout.addWidget(cache_group)
+
+        perf_layout.addStretch()
+        tabs.addTab(perf_tab, "Performance")
+
+        # TAB 5: PREVIEW SETTINGS (LAST TAB)
+
+        preview_tab = QWidget()
+        preview_layout = QVBoxLayout(preview_tab)
+
+        # Zoom Settings
+        zoom_group = QGroupBox("Zoom Settings")
+        zoom_form = QFormLayout()
+
+        zoom_spin = QSpinBox()
+        zoom_spin.setRange(10, 500)
+        zoom_spin.setValue(int(getattr(self, 'zoom_level', 1.0) * 100))
+        zoom_spin.setSuffix("%")
+        zoom_form.addRow("Default Zoom:", zoom_spin)
+
+        zoom_group.setLayout(zoom_form)
+        preview_layout.addWidget(zoom_group)
+
+        # Background Settings
+        bg_group = QGroupBox("Background Settings")
+        bg_layout = QVBoxLayout()
+
+        # Background mode
+        bg_mode_layout = QFormLayout()
+        bg_mode_combo = QComboBox()
+        bg_mode_combo.addItems(["Solid Color", "Checkerboard", "Grid"])
+        current_bg_mode = getattr(self, 'background_mode', 'solid')
+        mode_idx = {"solid": 0, "checkerboard": 1, "checker": 1, "grid": 2}.get(current_bg_mode, 0)
+
+        bg_mode_combo.setCurrentIndex(mode_idx)
+        bg_mode_layout.addRow("Background Mode:", bg_mode_combo)
+        bg_layout.addLayout(bg_mode_layout)
+
+        bg_layout.addSpacing(10)
+
+        # Checkerboard size
+        cb_label = QLabel("Checkerboard Size:")
+        bg_layout.addWidget(cb_label)
+
+        cb_layout = QHBoxLayout()
+        cb_slider = QSlider(Qt.Orientation.Horizontal)
+        cb_slider.setMinimum(4)
+        cb_slider.setMaximum(64)
+        cb_slider.setValue(getattr(self, '_checkerboard_size', 16))
+        cb_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        cb_slider.setTickInterval(8)
+        cb_layout.addWidget(cb_slider)
+
+        cb_spin = QSpinBox()
+        cb_spin.setMinimum(4)
+        cb_spin.setMaximum(64)
+        cb_spin.setValue(getattr(self, '_checkerboard_size', 16))
+        cb_spin.setSuffix(" px")
+        cb_spin.setFixedWidth(80)
+        cb_layout.addWidget(cb_spin)
+
+        bg_layout.addLayout(cb_layout)
+
+        # Connect checkerboard controls
+        #cb_slider.valueChanged.connect(cb_spin.setValue)
+        #cb_spin.valueChanged.connect(cb_slider.setValue)
+
+        # Hint
+        cb_hint = QLabel("Smaller = tighter pattern, larger = bigger squares")
+        cb_hint.setStyleSheet("color: #888; font-style: italic; font-size: 10px;")
+        bg_layout.addWidget(cb_hint)
+
+        bg_group.setLayout(bg_layout)
+        preview_layout.addWidget(bg_group)
+
+        # Overlay Settings
+        overlay_group = QGroupBox("Overlay View Settings")
+        overlay_layout = QVBoxLayout()
+
+        overlay_label = QLabel("Overlay Opacity (Normal over Alpha):")
+        overlay_layout.addWidget(overlay_label)
+
+        opacity_layout = QHBoxLayout()
+        opacity_slider = QSlider(Qt.Orientation.Horizontal)
+        opacity_slider.setMinimum(0)
+        opacity_slider.setMaximum(100)
+        opacity_slider.setValue(getattr(self, '_overlay_opacity', 50))
+        opacity_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        opacity_slider.setTickInterval(10)
+        opacity_layout.addWidget(opacity_slider)
+
+        opacity_spin = QSpinBox()
+        opacity_spin.setMinimum(0)
+        opacity_spin.setMaximum(100)
+        opacity_spin.setValue(getattr(self, '_overlay_opacity', 50))
+        opacity_spin.setSuffix(" %")
+        opacity_spin.setFixedWidth(80)
+        opacity_layout.addWidget(opacity_spin)
+
+        overlay_layout.addLayout(opacity_layout)
+
+        # Connect opacity controls
+        #opacity_slider.valueChanged.connect(opacity_spin.setValue)
+        #opacity_spin.valueChanged.connect(opacity_slider.setValue)
+
+        # Hint
+        opacity_hint = QLabel("0")
+        opacity_hint.setStyleSheet("color: #888; font-style: italic; font-size: 10px;")
+        overlay_layout.addWidget(opacity_hint)
+
+        overlay_group.setLayout(overlay_layout)
+        preview_layout.addWidget(overlay_group)
+
+        preview_layout.addStretch()
+        tabs.addTab(preview_tab, "Preview")
+
+        # Add tabs to dialog
+        layout.addWidget(tabs)
+
+        # BUTTONS
+
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+
+        # Apply button
+        apply_btn = QPushButton("Apply Settings")
+        apply_btn.setStyleSheet("""
+            QPushButton {
+                background: #0078d4;
+                color: white;
+                padding: 10px 24px;
+                font-weight: bold;
+                border-radius: 4px;
+                font-size: 13px;
+            }
+            QPushButton:hover {
+                background: #1984d8;
+            }
+        """)
+
+
+        def _apply_settings():
+            # FONTS
+            self.setFont(QFont(default_font_combo.currentFont().family(),
+                            default_font_size.value()))
+            self.title_font = QFont(title_font_combo.currentFont().family(),
+                                title_font_size.value())
+            self.panel_font = QFont(panel_font_combo.currentFont().family(),
+                                panel_font_size.value())
+            self.button_font = QFont(button_font_combo.currentFont().family(),
+                                    button_font_size.value())
+            self.infobar_font = QFont(infobar_font_combo.currentFont().family(),
+                                    infobar_font_size.value())
+
+            # Apply fonts to UI
+            self._apply_title_font()
+            self._apply_panel_font()
+            self._apply_button_font()
+            self._apply_infobar_font()
+
+            mode_map = {0: 'both', 1: 'icons', 2: 'text'}
+            self.button_display_mode = mode_map[button_mode_combo.currentIndex()]
+
+            # EXPORT
+            self.default_export_format = format_combo.currentText()
+
+            # PREVIEW
+            self.zoom_level = zoom_spin.value() / 100.0
+
+            bg_modes = ['solid', 'checkerboard', 'grid']
+            self.background_mode = bg_modes[bg_mode_combo.currentIndex()]
+
+            self._checkerboard_size = cb_spin.value()
+            self._overlay_opacity = opacity_spin.value()
+
+            # Update preview widget
+            if hasattr(self, 'preview_widget'):
+                if self.background_mode == 'checkerboard':
+                    self.preview_widget.set_checkerboard_background()
+                    self.preview_widget._checkerboard_size = self._checkerboard_size
+                else:
+                    self.preview_widget.set_background_color(self.preview_widget.bg_color)
+
+            # Apply button display mode
+            if hasattr(self, '_update_all_buttons'):
+                self._update_all_buttons()
+
+            # Refresh display
+
+            if self.main_window and hasattr(self.main_window, 'log_message'):
+                self.main_window.log_message("Workshop settings updated successfully")
+
+        apply_btn.clicked.connect(_apply_settings)
+        btn_layout.addWidget(apply_btn)
+
+        # Close button
+        close_btn = QPushButton("Close")
+        close_btn.setStyleSheet("padding: 10px 24px; font-size: 13px;")
+        close_btn.clicked.connect(dialog.close)
+        btn_layout.addWidget(close_btn)
+
+        layout.addLayout(btn_layout)
+
+        # Show dialog
+        dialog.exec()
+
+
+    def _apply_settings_OLD(self, dialog): #vers 5
         """Apply settings from dialog"""
         from PyQt6.QtGui import QFont
 
@@ -3780,10 +5791,74 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         event.accept()
 
 
+    def _create_theme_aware_icon(self, svg_data, size=20): #vers 4
+        """Create theme-aware SVG icon that adapts to light/dark themes
+
+        Args:
+            svg_data: SVG data as bytes with 'currentColor' placeholder
+            size: Icon size in pixels
+
+        Returns:
+            QIcon with proper theme colors
+        """
+        from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor
+        from PyQt6.QtSvg import QSvgRenderer
+        from PyQt6.QtCore import QByteArray
+
+        try:
+            # Get theme colors
+            theme_colors = self._get_theme_colors("default")
+            bg_primary = theme_colors.get('bg_primary', '#ffffff')
+            text_primary = theme_colors.get('text_primary', '#000000')
+
+            # Calculate luminance from background
+            bg_rgb = tuple(int(bg_primary.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
+            luminance = (0.299 * bg_rgb[0] + 0.587 * bg_rgb[1] + 0.114 * bg_rgb[2]) / 255
+
+            # Choose icon color - OPPOSITE of background with guaranteed contrast
+            if luminance > 0.5:
+                # Light background - FORCE dark icons
+                # Use text_primary if it's dark enough, otherwise force black
+                text_rgb = tuple(int(text_primary.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
+                text_luminance = (0.299 * text_rgb[0] + 0.587 * text_rgb[1] + 0.114 * text_rgb[2]) / 255
+
+                if text_luminance < 0.5:
+                    # text_primary is dark - use it
+                    icon_color = text_primary
+                else:
+                    # text_primary is too light - force black
+                    icon_color = '#000000'
+            else:
+                # Dark background - FORCE light icons
+                icon_color = '#FFFFFF'
+
+            # Replace currentColor with actual color
+            svg_str = svg_data.decode('utf-8')
+            svg_str = svg_str.replace('currentColor', icon_color)
+            svg_data_colored = svg_str.encode('utf-8')
+
+            # Render SVG
+            renderer = QSvgRenderer(QByteArray(svg_data_colored))
+            if not renderer.isValid():
+                return QIcon()
+
+            pixmap = QPixmap(size, size)
+            pixmap.fill(QColor(0, 0, 0, 0))  # Transparent background
+
+            painter = QPainter(pixmap)
+            renderer.render(painter)
+            painter.end()
+
+            return QIcon(pixmap)
+
+        except Exception as e:
+            print(f"Error creating theme-aware icon: {e}")
+            return QIcon()
+
 # - Logic stuff here.
 
-    def _on_research_clicked(self): #vers 9_right_panel
-        """Handle research button - show categories in middle with back button"""
+    def _on_research_clicked(self): #vers 12_complete
+        """Handle research button - initialize research mode"""
         try:
             img_debugger.debug("Loading Research Database...")
             from apps.components.research_tab import ResearchTab
@@ -3793,6 +5868,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             if not hasattr(self, 'research_tab') or self.research_tab is None:
                 self.research_tab = ResearchTab(self)
                 self.research_tab.load_database()
+                img_debugger.success("Research Database loaded")
 
             self.research_history = []
 
@@ -3828,6 +5904,9 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
                 layout.insertLayout(0, header)
 
+            # Clear display panel
+            self.clear_display()
+
             # Show categories
             self._research_show_categories()
 
@@ -3861,8 +5940,8 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             self.research_back_btn.setVisible(False)
             self.research_history = []
 
-            # Clear right panel
-            self._research_clear_right_panel()
+            # Clear display
+            self.clear_display()
 
             img_debugger.debug(f"Loaded {len(categories)} categories")
 
@@ -3901,17 +5980,17 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             self.research_title.setText(f"Research: {category}")
             self.research_back_btn.setVisible(True)
 
-            # Clear right panel
-            self._research_clear_right_panel()
+            # Clear display
+            self.clear_display()
 
-            img_debugger.debug(f"Showing {len(entries)} entries")
+            img_debugger.debug(f"Showing {len(entries)} entries for {category}")
 
         except Exception as e:
             img_debugger.error(f"Category error: {str(e)}")
 
 
     def _on_research_entry_click(self, item): #vers 1
-        """Show entry content in right panel"""
+        """Show entry content in multi-view display"""
         try:
             entry_item = self.middle_list.item(item.row(), 0)
             if not hasattr(entry_item, 'entry_data'):
@@ -3919,8 +5998,8 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
             entry = entry_item.entry_data
 
-            # Display in right panel
-            self._research_display_in_right_panel(entry)
+            # Display in multi-view display widget
+            self._research_display_entry(entry)
 
             img_debugger.debug(f"Displaying: {entry['title']}")
 
@@ -3928,68 +6007,175 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             img_debugger.error(f"Entry error: {str(e)}")
 
 
-    def _research_display_in_right_panel(self, entry): #vers 1
-        """Display research entry in right panel"""
+    def _research_display_entry(self, entry): #vers 4_smart_theme
+        """Display research entry with smart light/dark theme detection"""
         try:
-            # Find text widget in right panel
-            # Look for info_label, content widget, or create if needed
+            # Get theme colors from app_settings
+            theme_colors = {}
+            if hasattr(self, 'app_settings') and hasattr(self.app_settings, 'get_theme_colors'):
+                theme_colors = self.app_settings.get_theme_colors()
 
-            content_text = f"""
-    TITLE:
-    {entry['title']}
+            # Fallback to default colors
+            bg_primary = theme_colors.get('bg_primary', '#2b2b2b')
+            bg_secondary = theme_colors.get('bg_secondary', '#252525')
+            accent_primary = theme_colors.get('accent_primary', '#1976d2')
+            text_primary = theme_colors.get('text_primary', '#000000')
+            text_secondary = theme_colors.get('text_secondary', '#2d2d2d')
+            border = theme_colors.get('border', '#dee2e6')
 
-    CATEGORY:
-    {entry['category']}
+            # SMART: Detect if theme is light or dark
+            # Parse bg_primary to check if it's light or dark
+            try:
+                # Convert hex to RGB
+                bg_hex = bg_primary.lstrip('#')
+                bg_rgb = tuple(int(bg_hex[i:i+2], 16) for i in (0, 2, 4))
+                # Calculate luminance
+                luminance = (0.299 * bg_rgb[0] + 0.587 * bg_rgb[1] + 0.114 * bg_rgb[2]) / 255
+                is_dark_theme = luminance < 0.5
+            except:
+                is_dark_theme = True  # Default to dark
 
-    TAGS:
-    {', '.join(entry.get('tags', []))}
+            # Adjust text color based on theme
+            if is_dark_theme:
+                # Dark theme - use light text
+                content_text_color = '#e0e0e0'
+                meta_text_color = '#e0e0e0'
+            else:
+                # Light theme - use dark text
+                content_text_color = '#1a1a1a'
+                meta_text_color = '#1a1a1a'
 
-    ───────────────────────────────────
+            # Format content as HTML with smart theme colors
+            html_content = f"""
+    <html>
+    <head>
+        <style>
+            body {{
+                font-family: 'Segoe UI', Arial, sans-serif;
+                line-height: 1.6;
+                color: {content_text_color};
+                background-color: {bg_primary};
+                margin: 0;
+                padding: 20px;
+            }}
+            .header {{
+                border-bottom: 3px solid {accent_primary};
+                padding-bottom: 15px;
+                margin-bottom: 20px;
+            }}
+            .title {{
+                font-size: 24px;
+                font-weight: bold;
+                color: {accent_primary};
+                margin: 0 0 10px 0;
+            }}
+            .meta {{
+                display: grid;
+                grid-template-columns: 120px 1fr;
+                gap: 15px 20px;
+                margin: 15px 0;
+                padding: 15px;
+                background-color: {bg_secondary};
+                border-left: 4px solid {accent_primary};
+            }}
+            .meta-label {{
+                font-weight: bold;
+                color: {accent_primary};
+            }}
+            .meta-value {{
+                color: {meta_text_color};
+            }}
+            .tags {{
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                margin-top: 10px;
+            }}
+            .tag {{
+                background-color: {bg_secondary};
+                color: {accent_primary};
+                padding: 4px 12px;
+                border-radius: 3px;
+                font-size: 12px;
+                border: 1px solid {accent_primary};
+            }}
+            .content-section {{
+                margin-top: 25px;
+            }}
+            .section-title {{
+                font-size: 16px;
+                font-weight: bold;
+                color: {accent_primary};
+                margin-bottom: 12px;
+                border-bottom: 2px solid {accent_primary};
+                padding-bottom: 8px;
+            }}
+            .content-text {{
+                background-color: {bg_secondary};
+                padding: 15px;
+                border-left: 4px solid {accent_primary};
+                white-space: pre-wrap;
+                word-wrap: break-word;
+                font-size: 13px;
+                line-height: 1.5;
+                color: {content_text_color};
+            }}
+            .footer {{
+                margin-top: 25px;
+                padding-top: 15px;
+                border-top: 1px solid {border};
+                color: {text_secondary};
+                font-size: 12px;
+            }}
+            code {{
+                background-color: {bg_secondary};
+                padding: 2px 6px;
+                border-radius: 3px;
+                font-family: 'Courier New', monospace;
+                color: {accent_primary};
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <div class="title">{entry['title']}</div>
+        </div>
 
-    CONTENT:
+        <div class="meta">
+            <div class="meta-label">Category:</div>
+            <div class="meta-value">{entry['category']}</div>
 
-    {entry['content']}
+            <div class="meta-label">Tags:</div>
+            <div class="meta-value">
+                <div class="tags">
+                    {''.join(f'<span class="tag">{tag}</span>' for tag in entry.get('tags', []))}
+                </div>
+            </div>
+        </div>
 
-    ───────────────────────────────────
+        <div class="content-section">
+            <div class="section-title">Content</div>
+            <div class="content-text">{entry['content'].replace('<', '&lt;').replace('>', '&gt;')}</div>
+        </div>
 
-    Created: {entry.get('created', 'N/A')}
-    Modified: {entry.get('modified', 'N/A')}
+        <div class="footer">
+            <div><strong>Created:</strong> {entry.get('created', 'N/A')}</div>
+            <div><strong>Modified:</strong> {entry.get('modified', 'N/A')}</div>
+        </div>
+    </body>
+    </html>
     """
 
-            # Try to find an existing text display in right panel
-            if hasattr(self, 'info_display') and self.info_display:
-                if hasattr(self.info_display, 'setText'):
-                    self.info_display.setText(content_text)
-                    return
-
-            # Try other widget names
-            widget_names = ['info_label', 'content_text', 'details_text', 'display_text']
-            for name in widget_names:
-                if hasattr(self, name):
-                    widget = getattr(self, name)
-                    if widget and hasattr(widget, 'setText'):
-                        widget.setText(content_text)
-                        return
-
-            # If no widget exists, print to debug
-            img_debugger.warning("No text widget found in right panel for display")
-            print(content_text)  # Fallback to console
+            # Display using multi-view widget
+            if hasattr(self, 'text_display'):
+                self.text_display.setHtml(html_content)
+                self.display_mode_combo.setCurrentIndex(0)  # Switch to Text mode
+                img_debugger.success(f"Research entry displayed: {entry['title']} ({('Dark' if is_dark_theme else 'Light')} theme)")
+            else:
+                img_debugger.warning("Text display widget not available")
 
         except Exception as e:
             img_debugger.error(f"Display error: {str(e)}")
-
-
-    def _research_clear_right_panel(self): #vers 1
-        """Clear right panel content"""
-        try:
-            widget_names = ['info_display', 'info_label', 'content_text', 'details_text', 'display_text']
-            for name in widget_names:
-                if hasattr(self, name):
-                    widget = getattr(self, name)
-                    if widget and hasattr(widget, 'setText'):
-                        widget.setText("")
-        except:
-            pass
 
 
     def _on_research_back(self): #vers 1
@@ -4021,6 +6207,9 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
         except Exception as e:
             img_debugger.error(f"Entry selection error: {str(e)}")
+
+
+
 
 
 # - SVG icons should be in there own folder, example depends/svg_icons.py
