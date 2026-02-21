@@ -1602,7 +1602,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         # Settings button
         self.settings_btn = QPushButton()
         self.settings_btn.setFont(self.button_font)
-        #self.settings_btn.setIcon(ResBioSVGIcons.settings_icon())
+        self.settings_btn.setIcon(self._create_settings_icon())
         self.settings_btn.setText("Settings")
         self.settings_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         self.settings_btn.clicked.connect(self._show_workshop_settings)
@@ -1623,7 +1623,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         #Research button here.
         self.research_btn = QPushButton("Research")
         self.research_btn.setFont(self.button_font)
-        #self.research_btn.setIcon(ResBioSVGIcons.research_icon())  # NEW ICON METHOD
+        self.research_btn.setIcon(self._create_research_icon())  # NEW ICON METHOD
         self.research_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         self.research_btn.setToolTip("Open Research Database (Ctrl+R)")
         self.research_btn.clicked.connect(self._on_research_clicked)
@@ -1633,7 +1633,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         if not self.standalone_mode:
             self.open_img_btn = QPushButton("OpenIMG")
             self.open_img_btn.setFont(self.button_font)
-            self.open_img_btn.setIcon(ResBioSVGIcons.folder_icon())
+            self.open_img_btn.setIcon(self._create_folder_icon())
             self.open_img_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
             self.open_img_btn.clicked.connect(self.open_img_archive)
             layout.addWidget(self.open_img_btn)
@@ -1641,7 +1641,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         # Open button
         self.open_btn = QPushButton()
         self.open_btn.setFont(self.button_font)
-        self.open_btn.setIcon(ResBioSVGIcons.open_icon())
+        self.open_btn.setIcon(self._create_open_icon())
         self.open_btn.setText("Open")
         self.open_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         self.open_btn.setShortcut("Ctrl+O")
@@ -1655,7 +1655,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         # Save button
         self.save_btn = QPushButton()
         self.save_btn.setFont(self.button_font)
-        self.save_btn.setIcon(ResBioSVGIcons.save_icon())
+        self.save_btn.setIcon(self._create_save_icon())
         self.save_btn.setText("Save")
         self.save_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         self.save_btn.setShortcut("Ctrl+S")
@@ -1670,7 +1670,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         # Save button
         self.saveall_btn = QPushButton()
         self.saveall_btn.setFont(self.button_font)
-        self.saveall_btn.setIcon(ResBioSVGIcons.saveas_icon())
+        self.saveall_btn.setIcon(self._create_saveas_icon())
         self.saveall_btn.setText("Save All")
         self.saveall_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         self.saveall_btn.setShortcut("Ctrl+S")
@@ -1684,7 +1684,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
         self.export_all_btn = QPushButton("Extract")
         self.export_all_btn.setFont(self.button_font)
-        self.export_all_btn.setIcon(ResBioSVGIcons.package_icon())
+        self.export_all_btn.setIcon(self._create_package_icon())
         self.export_all_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         if self.button_display_mode == 'icons':
             self.export_all_btn.setFixedSize(self.iconsizex, self.iconsizey)
@@ -1696,7 +1696,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
         self.undo_btn = QPushButton()
         self.undo_btn.setFont(self.button_font)
-        self.undo_btn.setIcon(ResBioSVGIcons.undo_icon())
+        self.undo_btn.setIcon(self._create_undo_icon())
         self.undo_btn.setText("Undo")
         self.undo_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         if self.button_display_mode == 'icons':
@@ -1710,7 +1710,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         # Info button
         self.info_btn = QPushButton("")
         self.info_btn.setText("")  # CHANGED from "Info"
-        self.info_btn.setIcon(ResBioSVGIcons.info_icon())
+        self.info_btn.setIcon(self._create_info_icon())
         self.info_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         #self.info_btn.setMinimumHeight(30)
         self.info_btn.setToolTip("Information")
@@ -1794,7 +1794,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
         # Window controls
         self.minimize_btn = QPushButton()
-        self.minimize_btn.setIcon(ResBioSVGIcons.minimize_icon())
+        self.minimize_btn.setIcon(self._create_minimize_icon())
         self.minimize_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         if self.button_display_mode == 'icons':
             self.minimize_btn.setFixedSize(self.iconsizex, self.iconsizey)
@@ -1806,7 +1806,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         layout.addWidget(self.minimize_btn)
 
         self.maximize_btn = QPushButton()
-        self.maximize_btn.setIcon(ResBioSVGIcons.maximize_icon())
+        self.maximize_btn.setIcon(self._create_maximize_icon())
         self.maximize_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         if self.button_display_mode == 'icons':
             self.maximize_btn.setFixedSize(self.iconsizex, self.iconsizey)
@@ -1818,7 +1818,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         layout.addWidget(self.maximize_btn)
 
         self.close_btn = QPushButton()
-        self.close_btn.setIcon(ResBioSVGIcons.close_icon())
+        self.close_btn.setIcon(self._create_close_icon())
         self.close_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         if self.button_display_mode == 'icons':
             self.close_btn.setFixedSize(self.iconsizex, self.iconsizey)
@@ -2015,7 +2015,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             # Switch button
             self.switch_btn = QPushButton("Switch")
             self.switch_btn.setFont(self.button_font)
-            self.switch_btn.setIcon(ResBioSVGIcons.flip_vert_icon())
+            self.switch_btn.setIcon(self._create_flip_vert_icon())
             self.switch_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
             #self.switch_btn.clicked.connect(self.switch_surface_view)
             self.switch_btn.setEnabled(False)
@@ -2025,7 +2025,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             # Convert
             self.convert_btn = QPushButton("Convert")
             self.convert_btn.setFont(self.button_font)
-            self.convert_btn.setIcon(ResBioSVGIcons.convert_icon())
+            self.convert_btn.setIcon(self._create_convert_icon())
             self.convert_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
             self.convert_btn.setToolTip("Convert Collision format")
             #self.convert_btn.clicked.connect(self._convert_surface)
@@ -2043,7 +2043,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
             self.show_shadow_btn = QPushButton("View")
             self.show_shadow_btn.setFont(self.button_font)
-            self.show_shadow_btn.setIcon(ResBioSVGIcons.view_icon())
+            self.show_shadow_btn.setIcon(self._create_view_icon())
             self.show_shadow_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
             self.show_shadow_btn.setToolTip("View all levels")
             #self.show_shadow_btn.clicked.connect(self._open_mipmap_manager)
@@ -2052,7 +2052,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
             self.create_shadow_btn = QPushButton("Create")
             self.create_shadow_btn.setFont(self.button_font)
-            self.create_shadow_btn.setIcon(ResBioSVGIcons.add_icon())
+            self.create_shadow_btn.setIcon(self._create_add_icon())
             self.create_shadow_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
             self.create_shadow_btn.setToolTip("Generate Shadow Mesh")
             #self.create_shadow_btn.clicked.connect(self._create_shadow_dialog)
@@ -2061,7 +2061,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
             self.remove_shadow_btn = QPushButton("Remove")
             self.remove_shadow_btn.setFont(self.button_font)
-            self.remove_shadow_btn.setIcon(ResBioSVGIcons.delete_icon())
+            self.remove_shadow_btn.setIcon(self._create_delete_icon())
             self.remove_shadow_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
             self.remove_shadow_btn.setToolTip("Remove Shodow Mesh")
             #self.remove_shadow_btn.clicked.connect(self._remove_shadow)
@@ -2073,7 +2073,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
             self.compress_btn = QPushButton("Compress")
             self.compress_btn.setFont(self.button_font)
-            self.compress_btn.setIcon(ResBioSVGIcons.compress_icon())
+            self.compress_btn.setIcon(self._create_compress_icon())
             self.compress_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
             self.compress_btn.setToolTip("Compress Collision")
             #self.compress_btn.clicked.connect(self._compress_surface)
@@ -2082,7 +2082,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
             self.uncompress_btn = QPushButton("Uncompress")
             self.uncompress_btn.setFont(self.button_font)
-            self.uncompress_btn.setIcon(ResBioSVGIcons.uncompress_icon())
+            self.uncompress_btn.setIcon(self._create_uncompress_icon())
             self.uncompress_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
             self.uncompress_btn.setToolTip("Uncompress Collision")
             #self.uncompress_btn.clicked.connect(self._uncompress_surface)
@@ -2091,7 +2091,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
             self.import_btn = QPushButton("Import")
             self.import_btn.setFont(self.button_font)
-            self.import_btn.setIcon(ResBioSVGIcons.import_icon())
+            self.import_btn.setIcon(self._create_import_icon())
             self.import_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
             self.import_btn.setToolTip("Import col, cst, 3ds files")
             #self.import_btn.clicked.connect(self._import_selected)
@@ -2100,7 +2100,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
             self.export_btn = QPushButton("Export")
             self.export_btn.setFont(self.button_font)
-            self.export_btn.setIcon(ResBioSVGIcons.export_icon())
+            self.export_btn.setIcon(self._create_export_icon())
             self.export_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
             self.export_btn.setToolTip("Export col, cst, 3ds files")
             #self.export_btn.clicked.connect(self.export_selected)
@@ -2133,7 +2133,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         # Flip Vertical
         self.flip_vert_btn = QPushButton()
         self.flip_vert_btn.setFont(self.button_font)
-        self.flip_vert_btn.setIcon(ResBioSVGIcons.flip_vert_icon())
+        self.flip_vert_btn.setIcon(self._create_flip_vert_icon())
         self.flip_vert_btn.setText("Flip Vertical")
         self.flip_vert_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         if self.button_display_mode == 'icons':
@@ -2146,7 +2146,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         # Flip Horizontal
         self.flip_horz_btn = QPushButton()
         self.flip_horz_btn.setFont(self.button_font)
-        self.flip_horz_btn.setIcon(ResBioSVGIcons.flip_horz_icon())
+        self.flip_horz_btn.setIcon(self._create_flip_horz_icon())
         self.flip_horz_btn.setText("Flip Horizontal")
         self.flip_horz_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         if self.button_display_mode == 'icons':
@@ -2161,7 +2161,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         # Rotate Clockwise
         self.rotate_cw_btn = QPushButton()
         self.rotate_cw_btn.setFont(self.button_font)
-        self.rotate_cw_btn.setIcon(ResBioSVGIcons.rotate_cw_icon())
+        self.rotate_cw_btn.setIcon(self._create_rotate_cw_icon())
         self.rotate_cw_btn.setText("Rotate 90° CW")
         self.rotate_cw_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         if self.button_display_mode == 'icons':
@@ -2174,7 +2174,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         # Rotate Counter-Clockwise
         self.rotate_ccw_btn = QPushButton()
         self.rotate_ccw_btn.setFont(self.button_font)
-        self.rotate_ccw_btn.setIcon(ResBioSVGIcons.rotate_ccw_icon())
+        self.rotate_ccw_btn.setIcon(self._create_rotate_ccw_icon())
         self.rotate_ccw_btn.setText("Rotate 90° CCW")
         self.rotate_ccw_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         if self.button_display_mode == 'icons':
@@ -2189,7 +2189,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         # Analyze button
         self.analyze_btn = QPushButton()
         self.analyze_btn.setFont(self.button_font)
-        self.analyze_btn.setIcon(ResBioSVGIcons.analyze_icon())
+        self.analyze_btn.setIcon(self._create_analyze_icon())
         self.analyze_btn.setText("Analyze")
         self.analyze_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         if self.button_display_mode == 'icons':
@@ -2204,7 +2204,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         # Copy
         self.copy_btn = QPushButton()
         self.copy_btn.setFont(self.button_font)
-        self.copy_btn.setIcon(ResBioSVGIcons.copy_icon())
+        self.copy_btn.setIcon(self._create_copy_icon())
         self.copy_btn.setText("Copy")
         self.copy_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         if self.button_display_mode == 'icons':
@@ -2217,7 +2217,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         # Paste
         self.paste_btn = QPushButton()
         self.paste_btn.setFont(self.button_font)
-        self.paste_btn.setIcon(ResBioSVGIcons.paste_icon())
+        self.paste_btn.setIcon(self._create_paste_icon())
         self.paste_btn.setText("Paste")
         self.paste_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         if self.button_display_mode == 'icons':
@@ -2230,7 +2230,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         # Create Collision
         self.create_surface_btn = QPushButton()
         self.create_surface_btn.setFont(self.button_font)
-        self.create_surface_btn.setIcon(ResBioSVGIcons.create_icon())
+        self.create_surface_btn.setIcon(self._create_create_icon())
         self.create_surface_btn.setText("Create")
         self.create_surface_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         if self.button_display_mode == 'icons':
@@ -2242,7 +2242,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         # Delete collision
         self.delete_surface_btn = QPushButton()
         self.delete_surface_btn.setFont(self.button_font)
-        self.delete_surface_btn.setIcon(ResBioSVGIcons.delete_icon())
+        self.delete_surface_btn.setIcon(self._create_delete_icon())
         self.delete_surface_btn.setText("Delete")
         self.delete_surface_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         if self.button_display_mode == 'icons':
@@ -2255,7 +2255,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         # Duplicate Collision
         self.duplicate_surface_btn = QPushButton()
         self.duplicate_surface_btn.setFont(self.button_font)
-        self.duplicate_surface_btn.setIcon(ResBioSVGIcons.duplicate_icon())
+        self.duplicate_surface_btn.setIcon(self._create_duplicate_icon())
         self.duplicate_surface_btn.setText("Duplicate")
         self.duplicate_surface_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         if self.button_display_mode == 'icons':
@@ -2267,7 +2267,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
         self.paint_btn = QPushButton()
         self.paint_btn.setFont(self.button_font)
-        self.paint_btn.setIcon(ResBioSVGIcons.paint_icon())
+        self.paint_btn.setIcon(self._create_paint_icon())
         self.paint_btn.setText("Paint")
         self.paint_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         if self.button_display_mode == 'icons':
@@ -2282,7 +2282,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         # Check col vs DFF
         self.surface_type_btn = QPushButton()
         self.surface_type_btn.setFont(self.button_font)
-        self.surface_type_btn.setIcon(ResBioSVGIcons.check_icon())
+        self.surface_type_btn.setIcon(self._create_check_icon())
         self.surface_type_btn.setText("Surface type")
         self.surface_type_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         if self.button_display_mode == 'icons':
@@ -2294,7 +2294,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         # Check col vs DFF
         self.surface_edit_btn = QPushButton()
         self.surface_edit_btn.setFont(self.button_font)
-        self.surface_edit_btn.setIcon(ResBioSVGIcons.check_icon())
+        self.surface_edit_btn.setIcon(self._create_check_icon())
         self.surface_edit_btn.setText("Surface Edit")
         self.surface_edit_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         if self.button_display_mode == 'icons':
@@ -2305,7 +2305,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
         self.build_from_txd_btn = QPushButton()
         self.build_from_txd_btn.setFont(self.button_font)
-        self.build_from_txd_btn.setIcon(ResBioSVGIcons.build_icon())
+        self.build_from_txd_btn.setIcon(self._create_build_icon())
         self.build_from_txd_btn.setText("Build col via")
         self.build_from_txd_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         if self.button_display_mode == 'icons':
@@ -2335,7 +2335,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
         # Zoom In
         zoom_in_btn = QPushButton()
-        zoom_in_btn.setIcon(ResBioSVGIcons.zoom_in_icon())
+        zoom_in_btn.setIcon(self._create_zoom_in_icon())
         zoom_in_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         zoom_in_btn.setFixedSize(self.previframewidth, self.previframeheight)
         zoom_in_btn.setToolTip("Zoom In")
@@ -2344,7 +2344,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
         # Zoom Out
         zoom_out_btn = QPushButton()
-        zoom_out_btn.setIcon(ResBioSVGIcons.zoom_out_icon())
+        zoom_out_btn.setIcon(self._create_zoom_out_icon())
         zoom_out_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         zoom_out_btn.setFixedSize(self.previframewidth, self.previframeheight)
         zoom_out_btn.setToolTip("Zoom Out")
@@ -2353,7 +2353,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
         # Reset
         reset_btn = QPushButton()
-        reset_btn.setIcon(ResBioSVGIcons.reset_icon())
+        reset_btn.setIcon(self._create_reset_icon())
         reset_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         reset_btn.setFixedSize(self.previframewidth, self.previframeheight)
         reset_btn.setToolTip("Reset View")
@@ -2362,7 +2362,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
         # Fit
         fit_btn = QPushButton()
-        fit_btn.setIcon(ResBioSVGIcons.fit_icon())
+        fit_btn.setIcon(self._create_fit_icon())
         fit_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         fit_btn.setFixedSize(self.previframewidth, self.previframeheight)
         fit_btn.setToolTip("Fit to Window")
@@ -2373,7 +2373,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
         # Pan Up
         pan_up_btn = QPushButton()
-        pan_up_btn.setIcon(ResBioSVGIcons.arrow_up_icon())
+        pan_up_btn.setIcon(self._create_arrow_up_icon())
         pan_up_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         pan_up_btn.setFixedSize(self.previframewidth, self.previframeheight)
         pan_up_btn.setToolTip("Pan Up")
@@ -2382,7 +2382,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
         # Pan Down
         pan_down_btn = QPushButton()
-        pan_down_btn.setIcon(ResBioSVGIcons.arrow_down_icon())
+        pan_down_btn.setIcon(self._create_arrow_down_icon())
         pan_down_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         pan_down_btn.setFixedSize(self.previframewidth, self.previframeheight)
         pan_down_btn.setToolTip("Pan Down")
@@ -2391,7 +2391,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
         # Pan Left
         pan_left_btn = QPushButton()
-        pan_left_btn.setIcon(ResBioSVGIcons.arrow_left_icon())
+        pan_left_btn.setIcon(self._create_arrow_left_icon())
         pan_left_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         pan_left_btn.setFixedSize(self.previframewidth, self.previframeheight)
         pan_left_btn.setToolTip("Pan Left")
@@ -2400,7 +2400,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
         # Pan Right
         pan_right_btn = QPushButton()
-        pan_right_btn.setIcon(ResBioSVGIcons.arrow_right_icon())
+        pan_right_btn.setIcon(self._create_arrow_right_icon())
         pan_right_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         pan_right_btn.setFixedSize(self.previframewidth, self.previframeheight)
         pan_right_btn.setToolTip("Pan Right")
@@ -2409,7 +2409,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
         # Color picker
         bg_custom_btn = QPushButton()
-        bg_custom_btn.setIcon(ResBioSVGIcons.color_picker_icon())
+        bg_custom_btn.setIcon(self._create_color_picker_icon())
         bg_custom_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         bg_custom_btn.setFixedSize(self.previframewidth, self.previframeheight)
         bg_custom_btn.setToolTip("Pick Background Color")
@@ -2420,7 +2420,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
         # View Spheres toggle
         self.view_spheres_btn = QPushButton()
-        self.view_spheres_btn.setIcon(ResBioSVGIcons.sphere_icon())
+        self.view_spheres_btn.setIcon(self._create_sphere_icon())
         self.view_spheres_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         self.view_spheres_btn.setFixedSize(self.previframewidth, self.previframeheight)
         self.view_spheres_btn.setCheckable(True)
@@ -2431,7 +2431,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
         # View Boxes toggle
         self.view_boxes_btn = QPushButton()
-        self.view_boxes_btn.setIcon(ResBioSVGIcons.box_icon())
+        self.view_boxes_btn.setIcon(self._create_box_icon())
         self.view_boxes_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         self.view_boxes_btn.setFixedSize(self.previframewidth, self.previframeheight)
         self.view_boxes_btn.setCheckable(True)
@@ -2442,7 +2442,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
         # View Mesh toggle
         self.view_mesh_btn = QPushButton()
-        self.view_mesh_btn.setIcon(ResBioSVGIcons.mesh_icon())
+        self.view_mesh_btn.setIcon(self._create_mesh_icon())
         self.view_mesh_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         self.view_mesh_btn.setFixedSize(self.previframewidth, self.previframeheight)
         self.view_mesh_btn.setCheckable(True)
