@@ -2490,6 +2490,23 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             self.display_stack.setCurrentIndex(modes[mode])
             img_debugger.debug(f"Display mode changed to: {mode}")
 
+    def _on_research_clicked(self): #vers 1
+        """Open Research Database tab or dialog"""
+        try:
+            from apps.components.research_tab import ResearchTab
+            if not hasattr(self, '_research_dialog') or self._research_dialog is None:
+                from PyQt6.QtWidgets import QDialog, QVBoxLayout
+                self._research_dialog = QDialog(self)
+                self._research_dialog.setWindowTitle("Research Database")
+                self._research_dialog.resize(900, 600)
+                layout = QVBoxLayout(self._research_dialog)
+                self.research_tab = ResearchTab(self._research_dialog)
+                layout.addWidget(self.research_tab)
+            self._research_dialog.show()
+            self._research_dialog.raise_()
+        except Exception as e:
+            print(f"Research DB open failed: {e}")
+
     def show_research_content(self, content_text): #vers 1
         """Display research/text content in text viewer"""
         if hasattr(self, 'text_display'):
