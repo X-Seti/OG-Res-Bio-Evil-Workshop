@@ -444,6 +444,9 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         self.setMouseTracking(True)
         self.dock_display_mode = None
         self.file_form = []
+        self.current_rdt = None
+        self.current_file_path = None
+        self.icon_display_mode = "icons_and_text"
 
         # Get app_settings from main_window if available
         if main_window and hasattr(main_window, 'app_settings'):
@@ -1918,7 +1921,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
         self.display_mode_combo = QComboBox()
         self.display_mode_combo.setFont(self.panel_font)
-        self.display_mode_combo.addItems(["Text", "3D Model", "Texture", "Collision", "Info"])
+        self.display_mode_combo.addItems(["Text", "Room Map", "Texture", "Collision", "Info"])
         self.display_mode_combo.setMaximumWidth(120)
         self.display_mode_combo.currentTextChanged.connect(self._on_display_mode_changed)
         mode_layout.addWidget(self.display_mode_combo)
@@ -1936,12 +1939,21 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         self.text_display = text_display
         self.display_stack.addWidget(text_display)
 
-        # === PAGE 1: 3D Model Viewport (placeholder for now) ===
-        model_display = QLabel("3D Model Viewer\n(Coming soon)")
-        model_display.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        model_display.setStyleSheet("QLabel { background-color: #1a1a1a; color: #666; }")
-        self.model_display = model_display
-        self.display_stack.addWidget(model_display)
+        # === PAGE 1: Room Map Editor ===
+        try:
+            from apps.gui.room_map_editor import RoomMapWidget
+            self.room_map_editor = RoomMapWidget(self)
+            self.room_map_editor.item_selected.connect(self._on_map_item_selected)
+            self.room_map_editor.camera_selected.connect(self._on_map_camera_selected)
+            self.room_map_editor.item_moved.connect(self._on_map_item_moved)
+            self.display_stack.addWidget(self.room_map_editor)
+        except ImportError as e:
+            print(f"Warning: room_map_editor not available: {e}")
+            model_display = QLabel("Room Map Editor\n(Import error)")
+            model_display.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            model_display.setStyleSheet("QLabel { background-color: #1a1a1a; color: #666; }")
+            self.room_map_editor = None
+            self.display_stack.addWidget(model_display)
 
         # === PAGE 2: Texture Viewer (placeholder) ===
         texture_display = QLabel("Texture Viewer\n(Coming soon)")
@@ -2477,14 +2489,14 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         return status_bar
 
 
-    def _on_display_mode_changed(self, mode): #vers 1
-        """Handle display mode change"""
+    def _on_display_mode_changed(self, mode): #vers 2
+        """Handle display mode change."""
         modes = {
             "Text": 0,
-            "3D Model": 1,
+            "Room Map": 1,
             "Texture": 2,
             "Collision": 3,
-            "Info": 4
+            "Info": 4,
         }
         if mode in modes:
             self.display_stack.setCurrentIndex(modes[mode])
@@ -3506,56 +3518,6 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             img_debugger.error(f"Error updating view options: {str(e)}")
 
 
-    def _apply_button_mode(self, dialog): #vers 1
-        """Apply button display mode"""
-        mode_index = self.button_mode_combo.currentIndex()
-        mode_map = {0: 'both', 1: 'icons', 2: 'text'}
-
-        new_mode = mode_map[mode_index]
-
-        if new_mode != self.button_display_mode:
-            self.button_display_mode = new_mode
-            self._update_all_buttons()
-
-            if self.main_window and hasattr(self.main_window, 'log_message'):
-                mode_names = {0: 'Icons + Text', 1: 'Icons Only', 2: 'Text Only'}
-                self.main_window.log_message(f"Button style: {mode_names[mode_index]}")
-
-        dialog.close()
-
-
-    def _apply_fonts_to_widgets(self): #vers 1
-        """Apply fonts from AppSettings to all widgets"""
-        if not hasattr(self, 'default_font'):
-            return
-
-        print("\n=== Applying Fonts ===")
-        print(f"Default font: {self.default_font.family()} {self.default_font.pointSize()}pt")
-        print(f"Title font: {self.title_font.family()} {self.title_font.pointSize()}pt")
-        print(f"Panel font: {self.panel_font.family()} {self.panel_font.pointSize()}pt")
-        print(f"Button font: {self.button_font.family()} {self.button_font.pointSize()}pt")
-
-        # Apply default font to main window
-        self.setFont(self.default_font)
-
-        # Apply title font to titlebar
-        if hasattr(self, 'title_label'):
-            self.title_label.setFont(self.title_font)
-
-        # Apply panel font to lists
-        if hasattr(self, 'platform_list'):
-            self.platform_list.setFont(self.panel_font)
-        if hasattr(self, 'game_list'):
-            self.game_list.setFont(self.panel_font)
-
-        # Apply button font to all buttons
-        for btn in self.findChildren(QPushButton):
-            btn.setFont(self.button_font)
-
-        print("Fonts applied to widgets")
-        print("======================\n")
-
-
     def _update_toolbar_for_docking_state(self): #vers 1
         """Update toolbar visibility based on docking state"""
         # Hide/show drag button based on docking state
@@ -3731,353 +3693,6 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
 # - GUI button update
 
-    def _show_workshop_settings(self): #vers 1 < moved from TXD workshop
-        """Show complete workshop settings dialog"""
-        from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QTabWidget, QWidget, QGroupBox, QFormLayout, QSpinBox, QComboBox, QSlider, QLabel, QCheckBox, QFontComboBox)
-        from PyQt6.QtCore import Qt
-        from PyQt6.QtGui import QFont
-
-        dialog = QDialog(self)
-        dialog.setWindowTitle(App_name + " Settings")
-        dialog.setMinimumWidth(650)
-        dialog.setMinimumHeight(550)
-
-        layout = QVBoxLayout(dialog)
-
-        # Create tabs
-        tabs = QTabWidget()
-
-        # TAB 1: FONTS (FIRST TAB)
-
-        fonts_tab = QWidget()
-        fonts_layout = QVBoxLayout(fonts_tab)
-
-        # Default Font
-        default_font_group = QGroupBox("Default Font")
-        default_font_layout = QHBoxLayout()
-
-        default_font_combo = QFontComboBox()
-        default_font_combo.setCurrentFont(self.font())
-        default_font_layout.addWidget(default_font_combo)
-
-        default_font_size = QSpinBox()
-        default_font_size.setRange(8, 24)
-        default_font_size.setValue(self.font().pointSize())
-        default_font_size.setSuffix(" pt")
-        default_font_size.setFixedWidth(80)
-        default_font_layout.addWidget(default_font_size)
-
-        default_font_group.setLayout(default_font_layout)
-        fonts_layout.addWidget(default_font_group)
-
-        # Title Font
-        title_font_group = QGroupBox("Title Font")
-        title_font_layout = QHBoxLayout()
-
-        title_font_combo = QFontComboBox()
-        if hasattr(self, 'title_font'):
-            title_font_combo.setCurrentFont(self.title_font)
-        else:
-            title_font_combo.setCurrentFont(QFont("Arial", 14))
-        title_font_layout.addWidget(title_font_combo)
-
-        title_font_size = QSpinBox()
-        title_font_size.setRange(10, 32)
-        title_font_size.setValue(getattr(self, 'title_font', QFont("Arial", 14)).pointSize())
-        title_font_size.setSuffix(" pt")
-        title_font_size.setFixedWidth(80)
-        title_font_layout.addWidget(title_font_size)
-
-        title_font_group.setLayout(title_font_layout)
-        fonts_layout.addWidget(title_font_group)
-
-        # Panel Font
-        panel_font_group = QGroupBox("Panel Headers Font")
-        panel_font_layout = QHBoxLayout()
-
-        panel_font_combo = QFontComboBox()
-        if hasattr(self, 'panel_font'):
-            panel_font_combo.setCurrentFont(self.panel_font)
-        else:
-            panel_font_combo.setCurrentFont(QFont("Arial", 10))
-        panel_font_layout.addWidget(panel_font_combo)
-
-        panel_font_size = QSpinBox()
-        panel_font_size.setRange(8, 18)
-        panel_font_size.setValue(getattr(self, 'panel_font', QFont("Arial", 10)).pointSize())
-        panel_font_size.setSuffix(" pt")
-        panel_font_size.setFixedWidth(80)
-        panel_font_layout.addWidget(panel_font_size)
-
-        panel_font_group.setLayout(panel_font_layout)
-        fonts_layout.addWidget(panel_font_group)
-
-        # Button Font
-        button_font_group = QGroupBox("Button Font")
-        button_font_layout = QHBoxLayout()
-
-        button_font_combo = QFontComboBox()
-        if hasattr(self, 'button_font'):
-            button_font_combo.setCurrentFont(self.button_font)
-        else:
-            button_font_combo.setCurrentFont(QFont("Arial", 10))
-        button_font_layout.addWidget(button_font_combo)
-
-        button_font_size = QSpinBox()
-        button_font_size.setRange(8, 16)
-        button_font_size.setValue(getattr(self, 'button_font', QFont("Arial", 10)).pointSize())
-        button_font_size.setSuffix(" pt")
-        button_font_size.setFixedWidth(80)
-        button_font_layout.addWidget(button_font_size)
-
-        button_font_group.setLayout(button_font_layout)
-        fonts_layout.addWidget(button_font_group)
-
-        # Info Bar Font
-        infobar_font_group = QGroupBox("Info Bar Font")
-        infobar_font_layout = QHBoxLayout()
-
-        infobar_font_combo = QFontComboBox()
-        if hasattr(self, 'infobar_font'):
-            infobar_font_combo.setCurrentFont(self.infobar_font)
-        else:
-            infobar_font_combo.setCurrentFont(QFont("Courier New", 9))
-        infobar_font_layout.addWidget(infobar_font_combo)
-
-        infobar_font_size = QSpinBox()
-        infobar_font_size.setRange(7, 14)
-        infobar_font_size.setValue(getattr(self, 'infobar_font', QFont("Courier New", 9)).pointSize())
-        infobar_font_size.setSuffix(" pt")
-        infobar_font_size.setFixedWidth(80)
-        infobar_font_layout.addWidget(infobar_font_size)
-
-        infobar_font_group.setLayout(infobar_font_layout)
-        fonts_layout.addWidget(infobar_font_group)
-
-        fonts_layout.addStretch()
-        tabs.addTab(fonts_tab, "Fonts")
-
-        # TAB 2: DISPLAY SETTINGS
-
-        display_tab = QWidget()
-        display_layout = QVBoxLayout(display_tab)
-
-        # Button display mode
-        button_group = QGroupBox("Button Display Mode")
-        button_layout = QVBoxLayout()
-
-        button_mode_combo = QComboBox()
-        button_mode_combo.addItems(["Icons + Text", "Icons Only", "Text Only"])
-        current_mode = getattr(self, 'button_display_mode', 'both')
-        mode_map = {'both': 0, 'icons': 1, 'text': 2}
-        button_mode_combo.setCurrentIndex(mode_map.get(current_mode, 0))
-        button_layout.addWidget(button_mode_combo)
-
-        button_hint = QLabel("Changes how toolbar buttons are displayed")
-        button_hint.setStyleSheet("color: #888; font-style: italic;")
-        button_layout.addWidget(button_hint)
-
-        button_group.setLayout(button_layout)
-        display_layout.addWidget(button_group)
-
-        # Table display
-        table_group = QGroupBox("Texture List Display")
-        table_layout = QVBoxLayout()
-
-        show_thumbnails = QCheckBox("Show texture thumbnails")
-        show_thumbnails.setChecked(True)
-        table_layout.addWidget(show_thumbnails)
-
-        show_warnings = QCheckBox("Show warning icons for suspicious textures")
-        show_warnings.setChecked(True)
-        show_warnings.setToolTip("Shows icon if normal and alpha appear identical")
-        table_layout.addWidget(show_warnings)
-
-        table_group.setLayout(table_layout)
-        display_layout.addWidget(table_group)
-
-        display_layout.addStretch()
-        tabs.addTab(display_tab, "Display")
-
-
-
-        # TAB 3: placeholder
-        # TAB 4: PERFORMANCE
-
-        perf_tab = QWidget()
-        perf_layout = QVBoxLayout(perf_tab)
-
-        perf_group = QGroupBox("Performance Settings")
-        perf_form = QFormLayout()
-
-        preview_quality = QComboBox()
-        preview_quality.addItems(["Low (Fast)", "Medium", "High (Slow)"])
-        preview_quality.setCurrentIndex(1)
-        perf_form.addRow("Preview Quality:", preview_quality)
-
-        thumb_size = QSpinBox()
-        thumb_size.setRange(32, 128)
-        thumb_size.setValue(64)
-        thumb_size.setSuffix(" px")
-        perf_form.addRow("Thumbnail Size:", thumb_size)
-
-        perf_group.setLayout(perf_form)
-        perf_layout.addWidget(perf_group)
-
-        # Caching
-        cache_group = QGroupBox("Caching")
-        cache_layout = QVBoxLayout()
-
-        enable_cache = QCheckBox("Enable texture preview caching")
-        enable_cache.setChecked(True)
-        cache_layout.addWidget(enable_cache)
-
-        cache_hint = QLabel("Caching improves performance but uses more memory")
-        cache_hint.setStyleSheet("color: #888; font-style: italic;")
-        cache_layout.addWidget(cache_hint)
-
-        cache_group.setLayout(cache_layout)
-        perf_layout.addWidget(cache_group)
-
-        perf_layout.addStretch()
-        tabs.addTab(perf_tab, "Performance")
-
-        # TAB 5: PREVIEW SETTINGS (LAST TAB)
-
-        preview_tab = QWidget()
-        preview_layout = QVBoxLayout(preview_tab)
-
-        # Zoom Settings
-        zoom_group = QGroupBox("Zoom Settings")
-        zoom_form = QFormLayout()
-
-        zoom_spin = QSpinBox()
-        zoom_spin.setRange(10, 500)
-        zoom_spin.setValue(int(getattr(self, 'zoom_level', 1.0) * 100))
-        zoom_spin.setSuffix("%")
-        zoom_form.addRow("Default Zoom:", zoom_spin)
-
-        zoom_group.setLayout(zoom_form)
-        preview_layout.addWidget(zoom_group)
-
-        # Background Settings
-        bg_group = QGroupBox("Background Settings")
-        bg_layout = QVBoxLayout()
-
-        # Background mode
-        bg_mode_layout = QFormLayout()
-        bg_mode_combo = QComboBox()
-        bg_mode_combo.addItems(["Solid Color", "Checkerboard", "Grid"])
-        current_bg_mode = getattr(self, 'background_mode', 'solid')
-        mode_idx = {"solid": 0, "checkerboard": 1, "checker": 1, "grid": 2}.get(current_bg_mode, 0)
-
-        bg_mode_combo.setCurrentIndex(mode_idx)
-        bg_mode_layout.addRow("Background Mode:", bg_mode_combo)
-        bg_layout.addLayout(bg_mode_layout)
-
-        bg_layout.addSpacing(10)
-
-        # Checkerboard size
-        cb_label = QLabel("Checkerboard Size:")
-        bg_layout.addWidget(cb_label)
-
-        cb_layout = QHBoxLayout()
-        cb_slider = QSlider(Qt.Orientation.Horizontal)
-        cb_slider.setMinimum(4)
-        cb_slider.setMaximum(64)
-        cb_slider.setValue(getattr(self, '_checkerboard_size', 16))
-        cb_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        cb_slider.setTickInterval(8)
-        cb_layout.addWidget(cb_slider)
-
-        cb_spin = QSpinBox()
-        cb_spin.setMinimum(4)
-        cb_spin.setMaximum(64)
-        cb_spin.setValue(getattr(self, '_checkerboard_size', 16))
-        cb_spin.setSuffix(" px")
-        cb_spin.setFixedWidth(80)
-        cb_layout.addWidget(cb_spin)
-
-        bg_layout.addLayout(cb_layout)
-
-        # Connect checkerboard controls
-        #cb_slider.valueChanged.connect(cb_spin.setValue)
-        #cb_spin.valueChanged.connect(cb_slider.setValue)
-
-        # Hint
-        cb_hint = QLabel("Smaller = tighter pattern, larger = bigger squares")
-        cb_hint.setStyleSheet("color: #888; font-style: italic; font-size: 10px;")
-        bg_layout.addWidget(cb_hint)
-
-        bg_group.setLayout(bg_layout)
-        preview_layout.addWidget(bg_group)
-
-        # Overlay Settings
-        overlay_group = QGroupBox("Overlay View Settings")
-        overlay_layout = QVBoxLayout()
-
-        overlay_label = QLabel("Overlay Opacity (Normal over Alpha):")
-        overlay_layout.addWidget(overlay_label)
-
-        opacity_layout = QHBoxLayout()
-        opacity_slider = QSlider(Qt.Orientation.Horizontal)
-        opacity_slider.setMinimum(0)
-        opacity_slider.setMaximum(100)
-        opacity_slider.setValue(getattr(self, '_overlay_opacity', 50))
-        opacity_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        opacity_slider.setTickInterval(10)
-        opacity_layout.addWidget(opacity_slider)
-
-        opacity_spin = QSpinBox()
-        opacity_spin.setMinimum(0)
-        opacity_spin.setMaximum(100)
-        opacity_spin.setValue(getattr(self, '_overlay_opacity', 50))
-        opacity_spin.setSuffix(" %")
-        opacity_spin.setFixedWidth(80)
-        opacity_layout.addWidget(opacity_spin)
-
-        overlay_layout.addLayout(opacity_layout)
-
-        # Connect opacity controls
-        #opacity_slider.valueChanged.connect(opacity_spin.setValue)
-        #opacity_spin.valueChanged.connect(opacity_slider.setValue)
-
-        # Hint
-        opacity_hint = QLabel("0")
-        opacity_hint.setStyleSheet("color: #888; font-style: italic; font-size: 10px;")
-        overlay_layout.addWidget(opacity_hint)
-
-        overlay_group.setLayout(overlay_layout)
-        preview_layout.addWidget(overlay_group)
-
-        preview_layout.addStretch()
-        tabs.addTab(preview_tab, "Preview")
-
-        # Add tabs to dialog
-        layout.addWidget(tabs)
-
-        # BUTTONS
-
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-
-        # Apply button
-        apply_btn = QPushButton("Apply Settings")
-        apply_btn.setStyleSheet("""
-            QPushButton {
-                background: #0078d4;
-                color: white;
-                padding: 10px 24px;
-                font-weight: bold;
-                border-radius: 4px;
-                font-size: 13px;
-            }
-            QPushButton:hover {
-                background: #1984d8;
-            }
-        """)
-
-
     def _update_all_buttons(self): #vers 4
         # Update all buttons to match display mode
         buttons_to_update = [
@@ -4085,429 +3700,6 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             ('open_btn', 'Open'),
             ('save_btn', 'Save'),
         ]
-
-
-    def _get_icon_color(self): #vers 1
-        """Get icon color from current theme"""
-        if APPSETTINGS_AVAILABLE and self.app_settings:
-            colors = self.app_settings.get_theme_colors()
-            return colors.get('text_primary', '#ffffff')
-        return '#ffffff'
-
-
-
-
-
-    def _show_workshop_settings(self): #vers 1 < moved from TXD workshop
-        """Show complete workshop settings dialog"""
-        from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QTabWidget, QWidget, QGroupBox, QFormLayout, QSpinBox, QComboBox, QSlider, QLabel, QCheckBox, QFontComboBox)
-        from PyQt6.QtCore import Qt
-        from PyQt6.QtGui import QFont
-
-        dialog = QDialog(self)
-        dialog.setWindowTitle(App_name + " Settings")
-        dialog.setMinimumWidth(650)
-        dialog.setMinimumHeight(550)
-
-        layout = QVBoxLayout(dialog)
-
-        # Create tabs
-        tabs = QTabWidget()
-
-        # TAB 1: FONTS (FIRST TAB)
-
-        fonts_tab = QWidget()
-        fonts_layout = QVBoxLayout(fonts_tab)
-
-        # Default Font
-        default_font_group = QGroupBox("Default Font")
-        default_font_layout = QHBoxLayout()
-
-        default_font_combo = QFontComboBox()
-        default_font_combo.setCurrentFont(self.font())
-        default_font_layout.addWidget(default_font_combo)
-
-        default_font_size = QSpinBox()
-        default_font_size.setRange(8, 24)
-        default_font_size.setValue(self.font().pointSize())
-        default_font_size.setSuffix(" pt")
-        default_font_size.setFixedWidth(80)
-        default_font_layout.addWidget(default_font_size)
-
-        default_font_group.setLayout(default_font_layout)
-        fonts_layout.addWidget(default_font_group)
-
-        # Title Font
-        title_font_group = QGroupBox("Title Font")
-        title_font_layout = QHBoxLayout()
-
-        title_font_combo = QFontComboBox()
-        if hasattr(self, 'title_font'):
-            title_font_combo.setCurrentFont(self.title_font)
-        else:
-            title_font_combo.setCurrentFont(QFont("Arial", 14))
-        title_font_layout.addWidget(title_font_combo)
-
-        title_font_size = QSpinBox()
-        title_font_size.setRange(10, 32)
-        title_font_size.setValue(getattr(self, 'title_font', QFont("Arial", 14)).pointSize())
-        title_font_size.setSuffix(" pt")
-        title_font_size.setFixedWidth(80)
-        title_font_layout.addWidget(title_font_size)
-
-        title_font_group.setLayout(title_font_layout)
-        fonts_layout.addWidget(title_font_group)
-
-        # Panel Font
-        panel_font_group = QGroupBox("Panel Headers Font")
-        panel_font_layout = QHBoxLayout()
-
-        panel_font_combo = QFontComboBox()
-        if hasattr(self, 'panel_font'):
-            panel_font_combo.setCurrentFont(self.panel_font)
-        else:
-            panel_font_combo.setCurrentFont(QFont("Arial", 10))
-        panel_font_layout.addWidget(panel_font_combo)
-
-        panel_font_size = QSpinBox()
-        panel_font_size.setRange(8, 18)
-        panel_font_size.setValue(getattr(self, 'panel_font', QFont("Arial", 10)).pointSize())
-        panel_font_size.setSuffix(" pt")
-        panel_font_size.setFixedWidth(80)
-        panel_font_layout.addWidget(panel_font_size)
-
-        panel_font_group.setLayout(panel_font_layout)
-        fonts_layout.addWidget(panel_font_group)
-
-        # Button Font
-        button_font_group = QGroupBox("Button Font")
-        button_font_layout = QHBoxLayout()
-
-        button_font_combo = QFontComboBox()
-        if hasattr(self, 'button_font'):
-            button_font_combo.setCurrentFont(self.button_font)
-        else:
-            button_font_combo.setCurrentFont(QFont("Arial", 10))
-        button_font_layout.addWidget(button_font_combo)
-
-        button_font_size = QSpinBox()
-        button_font_size.setRange(8, 16)
-        button_font_size.setValue(getattr(self, 'button_font', QFont("Arial", 10)).pointSize())
-        button_font_size.setSuffix(" pt")
-        button_font_size.setFixedWidth(80)
-        button_font_layout.addWidget(button_font_size)
-
-        button_font_group.setLayout(button_font_layout)
-        fonts_layout.addWidget(button_font_group)
-
-        # Info Bar Font
-        infobar_font_group = QGroupBox("Info Bar Font")
-        infobar_font_layout = QHBoxLayout()
-
-        infobar_font_combo = QFontComboBox()
-        if hasattr(self, 'infobar_font'):
-            infobar_font_combo.setCurrentFont(self.infobar_font)
-        else:
-            infobar_font_combo.setCurrentFont(QFont("Courier New", 9))
-        infobar_font_layout.addWidget(infobar_font_combo)
-
-        infobar_font_size = QSpinBox()
-        infobar_font_size.setRange(7, 14)
-        infobar_font_size.setValue(getattr(self, 'infobar_font', QFont("Courier New", 9)).pointSize())
-        infobar_font_size.setSuffix(" pt")
-        infobar_font_size.setFixedWidth(80)
-        infobar_font_layout.addWidget(infobar_font_size)
-
-        infobar_font_group.setLayout(infobar_font_layout)
-        fonts_layout.addWidget(infobar_font_group)
-
-        fonts_layout.addStretch()
-        tabs.addTab(fonts_tab, "Fonts")
-
-        # TAB 2: DISPLAY SETTINGS
-
-        display_tab = QWidget()
-        display_layout = QVBoxLayout(display_tab)
-
-        # Button display mode
-        button_group = QGroupBox("Button Display Mode")
-        button_layout = QVBoxLayout()
-
-        button_mode_combo = QComboBox()
-        button_mode_combo.addItems(["Icons + Text", "Icons Only", "Text Only"])
-        current_mode = getattr(self, 'button_display_mode', 'both')
-        mode_map = {'both': 0, 'icons': 1, 'text': 2}
-        button_mode_combo.setCurrentIndex(mode_map.get(current_mode, 0))
-        button_layout.addWidget(button_mode_combo)
-
-        button_hint = QLabel("Changes how toolbar buttons are displayed")
-        button_hint.setStyleSheet("color: #888; font-style: italic;")
-        button_layout.addWidget(button_hint)
-
-        button_group.setLayout(button_layout)
-        display_layout.addWidget(button_group)
-
-        # Table display
-        table_group = QGroupBox("Texture List Display")
-        table_layout = QVBoxLayout()
-
-        show_thumbnails = QCheckBox("Show texture thumbnails")
-        show_thumbnails.setChecked(True)
-        table_layout.addWidget(show_thumbnails)
-
-        show_warnings = QCheckBox("Show warning icons for suspicious textures")
-        show_warnings.setChecked(True)
-        show_warnings.setToolTip("Shows icon if normal and alpha appear identical")
-        table_layout.addWidget(show_warnings)
-
-        table_group.setLayout(table_layout)
-        display_layout.addWidget(table_group)
-
-        display_layout.addStretch()
-        tabs.addTab(display_tab, "Display")
-
-
-        # TAB 3: placeholder
-        # TAB 4: PERFORMANCE
-
-        perf_tab = QWidget()
-        perf_layout = QVBoxLayout(perf_tab)
-
-        perf_group = QGroupBox("Performance Settings")
-        perf_form = QFormLayout()
-
-        preview_quality = QComboBox()
-        preview_quality.addItems(["Low (Fast)", "Medium", "High (Slow)"])
-        preview_quality.setCurrentIndex(1)
-        perf_form.addRow("Preview Quality:", preview_quality)
-
-        thumb_size = QSpinBox()
-        thumb_size.setRange(32, 128)
-        thumb_size.setValue(64)
-        thumb_size.setSuffix(" px")
-        perf_form.addRow("Thumbnail Size:", thumb_size)
-
-        perf_group.setLayout(perf_form)
-        perf_layout.addWidget(perf_group)
-
-        # Caching
-        cache_group = QGroupBox("Caching")
-        cache_layout = QVBoxLayout()
-
-        enable_cache = QCheckBox("Enable texture preview caching")
-        enable_cache.setChecked(True)
-        cache_layout.addWidget(enable_cache)
-
-        cache_hint = QLabel("Caching improves performance but uses more memory")
-        cache_hint.setStyleSheet("color: #888; font-style: italic;")
-        cache_layout.addWidget(cache_hint)
-
-        cache_group.setLayout(cache_layout)
-        perf_layout.addWidget(cache_group)
-
-        perf_layout.addStretch()
-        tabs.addTab(perf_tab, "Performance")
-
-        # TAB 5: PREVIEW SETTINGS (LAST TAB)
-
-        preview_tab = QWidget()
-        preview_layout = QVBoxLayout(preview_tab)
-
-        # Zoom Settings
-        zoom_group = QGroupBox("Zoom Settings")
-        zoom_form = QFormLayout()
-
-        zoom_spin = QSpinBox()
-        zoom_spin.setRange(10, 500)
-        zoom_spin.setValue(int(getattr(self, 'zoom_level', 1.0) * 100))
-        zoom_spin.setSuffix("%")
-        zoom_form.addRow("Default Zoom:", zoom_spin)
-
-        zoom_group.setLayout(zoom_form)
-        preview_layout.addWidget(zoom_group)
-
-        # Background Settings
-        bg_group = QGroupBox("Background Settings")
-        bg_layout = QVBoxLayout()
-
-        # Background mode
-        bg_mode_layout = QFormLayout()
-        bg_mode_combo = QComboBox()
-        bg_mode_combo.addItems(["Solid Color", "Checkerboard", "Grid"])
-        current_bg_mode = getattr(self, 'background_mode', 'solid')
-        mode_idx = {"solid": 0, "checkerboard": 1, "checker": 1, "grid": 2}.get(current_bg_mode, 0)
-
-        bg_mode_combo.setCurrentIndex(mode_idx)
-        bg_mode_layout.addRow("Background Mode:", bg_mode_combo)
-        bg_layout.addLayout(bg_mode_layout)
-
-        bg_layout.addSpacing(10)
-
-        # Checkerboard size
-        cb_label = QLabel("Checkerboard Size:")
-        bg_layout.addWidget(cb_label)
-
-        cb_layout = QHBoxLayout()
-        cb_slider = QSlider(Qt.Orientation.Horizontal)
-        cb_slider.setMinimum(4)
-        cb_slider.setMaximum(64)
-        cb_slider.setValue(getattr(self, '_checkerboard_size', 16))
-        cb_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        cb_slider.setTickInterval(8)
-        cb_layout.addWidget(cb_slider)
-
-        cb_spin = QSpinBox()
-        cb_spin.setMinimum(4)
-        cb_spin.setMaximum(64)
-        cb_spin.setValue(getattr(self, '_checkerboard_size', 16))
-        cb_spin.setSuffix(" px")
-        cb_spin.setFixedWidth(80)
-        cb_layout.addWidget(cb_spin)
-
-        bg_layout.addLayout(cb_layout)
-
-        # Connect checkerboard controls
-        #cb_slider.valueChanged.connect(cb_spin.setValue)
-        #cb_spin.valueChanged.connect(cb_slider.setValue)
-
-        # Hint
-        cb_hint = QLabel("Smaller = tighter pattern, larger = bigger squares")
-        cb_hint.setStyleSheet("color: #888; font-style: italic; font-size: 10px;")
-        bg_layout.addWidget(cb_hint)
-
-        bg_group.setLayout(bg_layout)
-        preview_layout.addWidget(bg_group)
-
-        # Overlay Settings
-        overlay_group = QGroupBox("Overlay View Settings")
-        overlay_layout = QVBoxLayout()
-
-        overlay_label = QLabel("Overlay Opacity (Normal over Alpha):")
-        overlay_layout.addWidget(overlay_label)
-
-        opacity_layout = QHBoxLayout()
-        opacity_slider = QSlider(Qt.Orientation.Horizontal)
-        opacity_slider.setMinimum(0)
-        opacity_slider.setMaximum(100)
-        opacity_slider.setValue(getattr(self, '_overlay_opacity', 50))
-        opacity_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        opacity_slider.setTickInterval(10)
-        opacity_layout.addWidget(opacity_slider)
-
-        opacity_spin = QSpinBox()
-        opacity_spin.setMinimum(0)
-        opacity_spin.setMaximum(100)
-        opacity_spin.setValue(getattr(self, '_overlay_opacity', 50))
-        opacity_spin.setSuffix(" %")
-        opacity_spin.setFixedWidth(80)
-        opacity_layout.addWidget(opacity_spin)
-
-        overlay_layout.addLayout(opacity_layout)
-
-        # Connect opacity controls
-        #opacity_slider.valueChanged.connect(opacity_spin.setValue)
-        #opacity_spin.valueChanged.connect(opacity_slider.setValue)
-
-        # Hint
-        opacity_hint = QLabel("0")
-        opacity_hint.setStyleSheet("color: #888; font-style: italic; font-size: 10px;")
-        overlay_layout.addWidget(opacity_hint)
-
-        overlay_group.setLayout(overlay_layout)
-        preview_layout.addWidget(overlay_group)
-
-        preview_layout.addStretch()
-        tabs.addTab(preview_tab, "Preview")
-
-        # Add tabs to dialog
-        layout.addWidget(tabs)
-
-        # BUTTONS
-
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-
-        # Apply button
-        apply_btn = QPushButton("Apply Settings")
-        apply_btn.setStyleSheet("""
-            QPushButton {
-                background: #0078d4;
-                color: white;
-                padding: 10px 24px;
-                font-weight: bold;
-                border-radius: 4px;
-                font-size: 13px;
-            }
-            QPushButton:hover {
-                background: #1984d8;
-            }
-        """)
-
-
-        def _apply_settings():
-            # FONTS
-            self.setFont(QFont(default_font_combo.currentFont().family(),
-                            default_font_size.value()))
-            self.title_font = QFont(title_font_combo.currentFont().family(),
-                                title_font_size.value())
-            self.panel_font = QFont(panel_font_combo.currentFont().family(),
-                                panel_font_size.value())
-            self.button_font = QFont(button_font_combo.currentFont().family(),
-                                    button_font_size.value())
-            self.infobar_font = QFont(infobar_font_combo.currentFont().family(),
-                                    infobar_font_size.value())
-
-            # Apply fonts to UI
-            self._apply_title_font()
-            self._apply_panel_font()
-            self._apply_button_font()
-            self._apply_infobar_font()
-
-            mode_map = {0: 'both', 1: 'icons', 2: 'text'}
-            self.button_display_mode = mode_map[button_mode_combo.currentIndex()]
-
-            # EXPORT
-            self.default_export_format = format_combo.currentText()
-
-            # PREVIEW
-            self.zoom_level = zoom_spin.value() / 100.0
-
-            bg_modes = ['solid', 'checkerboard', 'grid']
-            self.background_mode = bg_modes[bg_mode_combo.currentIndex()]
-
-            self._checkerboard_size = cb_spin.value()
-            self._overlay_opacity = opacity_spin.value()
-
-            # Update preview widget
-            if hasattr(self, 'preview_widget'):
-                if self.background_mode == 'checkerboard':
-                    self.preview_widget.set_checkerboard_background()
-                    self.preview_widget._checkerboard_size = self._checkerboard_size
-                else:
-                    self.preview_widget.set_background_color(self.preview_widget.bg_color)
-
-            # Apply button display mode
-            if hasattr(self, '_update_all_buttons'):
-                self._update_all_buttons()
-
-            # Refresh display
-
-            if self.main_window and hasattr(self.main_window, 'log_message'):
-                self.main_window.log_message("Workshop settings updated successfully")
-
-        apply_btn.clicked.connect(_apply_settings)
-        btn_layout.addWidget(apply_btn)
-
-        # Close button
-        close_btn = QPushButton("Close")
-        close_btn.setStyleSheet("padding: 10px 24px; font-size: 13px;")
-        close_btn.clicked.connect(dialog.close)
-        btn_layout.addWidget(close_btn)
-
-        layout.addLayout(btn_layout)
-
-        # Show dialog
-        dialog.exec()
 
 
     def _apply_settings_OLD(self, dialog): #vers 5
@@ -4538,22 +3730,33 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         locale_text = self.settings_locale_combo.currentText()
 
 
-    def _open_file(self): #vers 1
-        """Open file dialog and load COL file"""
+    def _open_file(self): #vers 2
+        """Open file dialog and load RDT room file."""
         try:
             file_path, _ = QFileDialog.getOpenFileName(
                 self,
-                "Open Obj File",
+                "Open RDT Room File",
                 "",
-                "Obj Files (*.col);;All Files (*)"
+                "RDT Room Files (*.rdt *.RDT);;All Files (*)"
             )
-
             if file_path:
-                self.open_obj_file(file_path)
-
+                self._load_rdt(file_path)
         except Exception as e:
             img_debugger.error(f"Error in open file dialog: {str(e)}")
             QMessageBox.critical(self, "Error", f"Failed to open file:\n{str(e)}")
+
+    def _load_rdt(self, file_path: str): #vers 1
+        """Load an RDT file via rdt_loader and update UI."""
+        try:
+            from apps.methods.rdt_loader import load_rdt_file
+            rdt = load_rdt_file(self, file_path)
+            if rdt and not rdt.valid and rdt.parse_errors:
+                errors = '\n'.join(rdt.parse_errors)
+                QMessageBox.warning(self, "Parse Warnings",
+                    f"File loaded with errors:\n{errors}")
+        except Exception as e:
+            img_debugger.error(f"RDT load error: {e}")
+            QMessageBox.critical(self, "Load Error", f"Failed to load RDT:\n{str(e)}")
 
 
     def _save_file(self): #vers 1
@@ -5053,19 +4256,6 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
         super().keyPressEvent(event)
 
-    def keyPressEvent(self, event): #vers 1_updated
-        """Handle keyboard shortcuts including Research DB"""
-        from PyQt6.QtCore import Qt
-
-        # Ctrl+R - Research Database
-        if event.key() == Qt.Key.Key_R and event.modifiers() == Qt.KeyboardModifier.ControlModifier:
-            self._on_research_clicked()
-            event.accept()
-            return
-
-        # Your existing key handlers...
-        super().keyPressEvent(event)
-
     def _enable_move_mode(self): #vers 2
         # Enable move window mode using system move
         # Use Qt's system move which works on Windows, Linux, etc.
@@ -5133,16 +4323,6 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             self.setGeometry(current_geometry)
             if was_visible:
                 self.show()
-
-
-    def keyPressEvent(self, event): #ver 1
-        if event.key() == Qt.Key.Key_D and not event.modifiers():
-            self.toggle_dock_mode(); event.accept(); return
-
-        if event.key() == Qt.Key.Key_T and not event.modifiers():
-            if self.is_docked: self._undock_from_main(); event.accept(); return
-
-        super().keyPressEvent(event)
 
 
     def paintEvent(self, event): #vers 2
@@ -5440,6 +4620,71 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         else:
             self.showMaximized()
 
+
+
+
+# - Missing stubs and map event handlers
+
+    def _on_col_selected(self, item): #vers 1
+        """Handle selection in the left panel file list."""
+        pass
+
+    def _enable_name_edit(self, event, readonly=False): #vers 1
+        """Toggle the info_name field between read-only and editable."""
+        if hasattr(self, 'info_name'):
+            self.info_name.setReadOnly(readonly)
+            if not readonly:
+                self.info_name.setFocus()
+
+    def _create_merged_icons_line(self): #vers 1
+        """Return a compact single-line layout for icon-only button mode."""
+        from PyQt6.QtWidgets import QHBoxLayout
+        layout = QHBoxLayout()
+        layout.setSpacing(2)
+        return layout
+
+    def _show_shaders_dialog(self): #vers 1
+        """Placeholder for shaders dialog."""
+        pass
+
+    def _set_icon_display_mode(self, mode: str): #vers 1
+        """Set icon display mode."""
+        self.icon_display_mode = mode
+
+    def _on_map_item_selected(self, item_index: int): #vers 1
+        """Handle item selection from the room map editor."""
+        if not hasattr(self, 'current_rdt') or not self.current_rdt:
+            return
+        items = self.current_rdt.items
+        if 0 <= item_index < len(items):
+            from apps.core.re1_formats import get_item_name
+            item = items[item_index]
+            if hasattr(self, 'info_name'):
+                self.info_name.setText(get_item_name(item.item_type))
+            if hasattr(self, 'middle_list'):
+                from apps.methods.rdt_loader import populate_items_table
+                populate_items_table(self, self.current_rdt)
+                self.middle_list.selectRow(item_index)
+
+    def _on_map_camera_selected(self, camera_index: int): #vers 1
+        """Handle camera selection from the room map editor."""
+        if not hasattr(self, 'current_rdt') or not self.current_rdt:
+            return
+        cameras = self.current_rdt.cameras
+        if 0 <= camera_index < len(cameras):
+            cam = cameras[camera_index]
+            if hasattr(self, 'info_name'):
+                self.info_name.setText(f"Camera {camera_index}")
+            if hasattr(self, 'middle_list'):
+                from apps.methods.rdt_loader import populate_cameras_table
+                populate_cameras_table(self, self.current_rdt)
+                self.middle_list.selectRow(camera_index)
+
+    def _on_map_item_moved(self, item_index: int, new_x: int, new_z: int): #vers 1
+        """Handle item drag in the room map editor - marks file as modified."""
+        if hasattr(self, 'save_btn'):
+            self.save_btn.setEnabled(True)
+        print(f"Item {item_index} moved to X={new_x} Z={new_z}")
 
     def closeEvent(self, event): #ver 1
         self.window_closed.emit()
