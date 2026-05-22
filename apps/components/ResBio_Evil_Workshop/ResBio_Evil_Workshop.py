@@ -1631,7 +1631,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         #Research button here.
         self.research_btn = QPushButton("Research")
         self.research_btn.setFont(self.button_font)
-        #self.research_btn.setIcon(ResBioSVGIcons.research_icon())  # NEW ICON METHOD
+        self.research_btn.setIcon(ResBioSVGIcons.research_icon())
         self.research_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         self.research_btn.setToolTip("Open Research Database (Ctrl+R)")
         self.research_btn.clicked.connect(self._on_research_clicked)
@@ -2516,7 +2516,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
     def _on_research_clicked(self): #vers 1
         """Open Research Database tab or dialog"""
         try:
-            from apps.components.research_tab import ResearchTab
+            from apps.methods.research_tab import ResearchTab
             if not hasattr(self, '_research_dialog') or self._research_dialog is None:
                 from PyQt6.QtWidgets import QDialog, QVBoxLayout
                 self._research_dialog = QDialog(self)

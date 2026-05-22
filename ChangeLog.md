@@ -135,3 +135,53 @@ First time exploring RE1 file formats. reevengi-tools provides excellent referen
 - [ ] _save_file: RDT write-back (modify items, export)
 - [ ] Middle panel: tab-switch between overview/items/cameras views
 - [ ] EMD model viewer (display stack page - future)
+
+---
+
+## May 22 2026 - Session 3 (5:30am wrap-up)
+
+### Bug Fixes
+- **ResBio_Evil_Workshop.py** - Fixed `No module named 'depends'` by inserting `sys.path` patch before bare `depends.*` imports
+- **resbio_svg_icons.py** - Was empty stub (27 lines). Replaced with full factory: 50+ icon methods. All toolbar icons now functional.
+- **ResBio_Evil_Workshop.py** - Fixed `apps.debug.debug_functions` import in docked mode block (changed to `depends.img_debug_functions`)
+- **ResBio_Evil_Workshop.py** - Fixed research tab import: `apps.components.research_tab` -> `apps.methods.research_tab`
+- **resbio_svg_icons.py** - Added `research_icon()` (book with lines SVG)
+- **ResBio_Evil_Workshop.py** - Research button now shows icon
+
+### Readme
+- **Readme.md** - Written from scratch: purpose, file formats table, run instructions, game file locations, project layout
+
+---
+
+## TODO - Next session priority order
+
+### Immediate (app must-haves)
+- [ ] Middle panel tab bar: Overview / Items / Cameras / Collision (switch table content without mode combo)
+- [ ] _save_file: write modified item positions back to RDT binary
+- [ ] Open TIM file directly from toolbar (alongside RDT)
+
+### Room connection map (the big one)
+The room IDs encode stage and room number: `roomSXX` where S=stage, XX=room hex.
+RDT offset[0] = camera switch table, which contains door/transition data linking rooms.
+Plan:
+- **apps/core/re1_room_map.py** - parse room connections from camera switch tables across all RDTs in a folder
+- **apps/gui/stage_map_editor.py** - canvas showing all rooms as boxes with connection lines
+  - Click a room box to load it in the room map editor
+  - Drag to rearrange room order (cosmetic for now)
+  - Right-click: add room, remove room, swap two rooms
+- Room swap: re-index the RDT offset that references the target room ID in the camera switch table
+- Room removal: zero out or redirect the camera switch entry pointing to removed room
+- Room addition: duplicate an existing RDT, assign new room ID, add a connection from existing room
+
+### Item editing
+- [ ] Double-click item in map editor -> dialog: change type, amount, flags
+- [ ] Item type combo box wired to RE1_ITEM_NAMES
+- [ ] Write changes back to RDT binary on Save
+
+### Texture / model viewers
+- [ ] Wire TIM viewer: when RDT loaded, check offset[3] (TMD/TIM pairs) and offer to view embedded textures
+- [ ] EMD viewer: basic vertex/face wireframe using QPainter (no OpenGL required for RE1 scale)
+
+### File browser
+- [ ] Left panel: folder browser for game directory, lists all .rdt files by stage
+- [ ] Shows room IDs, file sizes, item counts at a glance

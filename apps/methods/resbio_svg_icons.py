@@ -569,3 +569,14 @@ class ResBioSVGIcons:
             '<polygon points="11,5 6,9 2,9 2,15 6,15 11,19" fill="none" stroke="currentColor" stroke-width="1.8"/>'
             '<path d="M15.54 8.46a5 5 0 0 1 0 7.07" fill="none" stroke="currentColor" stroke-width="2"/>'
             '</svg>', size, color)
+
+    @staticmethod
+    def research_icon(size=20, color='#cccccc') -> QIcon: #vers 1
+        return ResBioSVGIcons._make(
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
+            '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" fill="none" stroke="currentColor" stroke-width="1.8"/>'
+            '<path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" fill="none" stroke="currentColor" stroke-width="1.8"/>'
+            '<line x1="9" y1="7" x2="15" y2="7" stroke="currentColor" stroke-width="1.5"/>'
+            '<line x1="9" y1="11" x2="15" y2="11" stroke="currentColor" stroke-width="1.5"/>'
+            '<line x1="9" y1="15" x2="12" y2="15" stroke="currentColor" stroke-width="1.5"/>'
+            '</svg>', size, color)
