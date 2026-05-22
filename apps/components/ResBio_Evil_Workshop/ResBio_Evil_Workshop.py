@@ -1955,12 +1955,18 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             self.room_map_editor = None
             self.display_stack.addWidget(model_display)
 
-        # === PAGE 2: Texture Viewer (placeholder) ===
-        texture_display = QLabel("Texture Viewer\n(Coming soon)")
-        texture_display.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        texture_display.setStyleSheet("QLabel { background-color: #1a1a1a; color: #666; }")
-        self.texture_display = texture_display
-        self.display_stack.addWidget(texture_display)
+        # === PAGE 2: TIM Texture Viewer ===
+        try:
+            from apps.gui.tim_viewer import TIMViewerWidget
+            self.tim_viewer = TIMViewerWidget(self)
+            self.display_stack.addWidget(self.tim_viewer)
+        except ImportError as e:
+            print(f"Warning: tim_viewer not available: {e}")
+            texture_display = QLabel("Texture Viewer\n(Import error)")
+            texture_display.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            texture_display.setStyleSheet("QLabel { background-color: #1a1a1a; color: #666; }")
+            self.tim_viewer = None
+            self.display_stack.addWidget(texture_display)
 
         # === PAGE 3: Collision Viewer (placeholder) ===
         collision_display = QLabel("Collision Viewer\n(Coming soon)")
@@ -2532,11 +2538,18 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             self.display_mode_combo.setCurrentIndex(1)  # Switch to 3D mode
             img_debugger.debug("Model viewer activated")
 
-    def show_texture(self, texture_data): #vers 1
-        """Display texture (placeholder for future implementation)"""
-        if hasattr(self, 'texture_display'):
-            self.display_mode_combo.setCurrentIndex(2)  # Switch to Texture mode
-            img_debugger.debug("Texture viewer activated")
+    def show_texture(self, texture_data): #vers 2
+        """Display a TIMFile in the texture viewer."""
+        if hasattr(self, 'tim_viewer') and self.tim_viewer:
+            self.tim_viewer.load_tim_data(texture_data)
+            self.display_mode_combo.setCurrentIndex(2)
+        img_debugger.debug("Texture viewer activated")
+
+    def show_tim_file(self, file_path: str): #vers 1
+        """Load and display a TIM file by path."""
+        if hasattr(self, 'tim_viewer') and self.tim_viewer:
+            self.tim_viewer.load_tim_file(file_path)
+            self.display_mode_combo.setCurrentIndex(2)
 
     def show_collision(self, collision_data): #vers 1
         """Display collision data (placeholder for future implementation)"""
