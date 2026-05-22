@@ -1920,19 +1920,20 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         if folder:
             self._load_stage_folder(folder)
 
-    def _load_stage_folder(self, folder_path: str): #vers 2
-        """Scan folder for RDT files and populate left list, stage map and floor plan."""
-        import os
+    def _load_stage_folder(self, folder_path: str): #vers 3
+        """Load stage folder using asset loader - populates left list,
+        stage map, and floor plan progressively as files load."""
         if not hasattr(self, 'col_list_widget') or not self.col_list_widget:
             return
+
+        # Populate left file list immediately (no parsing needed)
         self.col_list_widget.clear()
         if hasattr(self, 'folder_path_label'):
             self.folder_path_label.setText(os.path.basename(folder_path))
             self.folder_path_label.setToolTip(folder_path)
 
-        rdt_files = sorted([
-            f for f in os.listdir(folder_path) if f.upper().endswith('.RDT')
-        ])
+        rdt_files = sorted([f for f in os.listdir(folder_path)
+                            if f.upper().endswith('.RDT')])
         for filename in rdt_files:
             full_path = os.path.join(folder_path, filename)
             size = os.path.getsize(full_path)
@@ -1940,25 +1941,34 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             item.setData(Qt.ItemDataRole.UserRole, full_path)
             self.col_list_widget.addItem(item)
 
-        # Load into stage map editor
+        # Load stage map (uses its own internal loader)
         if hasattr(self, 'stage_map_editor') and self.stage_map_editor:
             self.stage_map_editor.load_folder(folder_path)
 
-        # Load all RDTs into floor plan for full stage view
-        if hasattr(self, 'floor_plan') and self.floor_plan:
-            from apps.core.re1_formats import parse_rdt
-            rdt_pairs = []
-            for filename in rdt_files:
-                full_path = os.path.join(folder_path, filename)
-                room_id = os.path.splitext(filename)[0].upper()
-                try:
-                    rdt = parse_rdt(full_path)
-                    if rdt.valid:
-                        rdt_pairs.append((room_id, rdt))
-                except Exception:
-                    pass
-            if rdt_pairs:
-                self.floor_plan.load_stage(rdt_pairs)
+        # Start asset loader for floor plan and backgrounds
+        from apps.core.re_asset_loader import load_stage_assets
+        self._stage_rdt_pairs = []
+
+        def _on_rdt(room_id, rdt):
+            self._stage_rdt_pairs.append((room_id, rdt))
+            if hasattr(self, 'floor_plan') and self.floor_plan:
+                self.floor_plan.canvas.load_stage(list(self._stage_rdt_pairs))
+
+        def _on_done(assets):
+            img_debugger.debug(f"Stage loaded: {assets.room_count} rooms")
+            self._stage_assets = assets
+
+        if not hasattr(self, '_stage_loader_refs'):
+            self._stage_loader_refs = []
+
+        thread, loader = load_stage_assets(
+            folder_path,
+            on_rdt=_on_rdt,
+            on_done=_on_done,
+            load_backgrounds=True,
+        )
+        # Keep references alive
+        self._stage_loader_refs = [(thread, loader)]
 
     def _on_left_file_selected(self, item): #vers 1
         """Highlight file in list without loading."""
