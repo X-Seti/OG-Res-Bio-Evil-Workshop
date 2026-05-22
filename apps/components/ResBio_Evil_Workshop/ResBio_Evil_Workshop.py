@@ -595,7 +595,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         right_panel = self._create_right_panel()
 
         # Add panels to splitter based on mode
-        if left_panel is not None:  # IMG Factory mode
+        if left_panel is not None:
             main_splitter.addWidget(left_panel)
             main_splitter.addWidget(middle_panel)
             main_splitter.addWidget(right_panel)
@@ -1660,6 +1660,16 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         self.open_btn.clicked.connect(self._open_file)
         layout.addWidget(self.open_btn)
 
+        # Open TIM button
+        self.open_tim_btn = QPushButton()
+        self.open_tim_btn.setFont(self.button_font)
+        self.open_tim_btn.setIcon(ResBioSVGIcons.paint_icon())
+        self.open_tim_btn.setText("TIM")
+        self.open_tim_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
+        self.open_tim_btn.setToolTip("Open TIM texture file")
+        self.open_tim_btn.clicked.connect(self._open_tim_file)
+        layout.addWidget(self.open_tim_btn)
+
         # Save button
         self.save_btn = QPushButton()
         self.save_btn.setFont(self.button_font)
@@ -1840,29 +1850,85 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         return self.toolbar
 
 
-    def _create_left_panel(self): #vers 5
-        # Create left panel - COL file list (only in IMG Factory mode)
-        # In standalone mode, don't create this panel
-        if self.standalone_mode:
-            self.col_list_widget = None  # Explicitly set to None
-            return None
-
-        if not self.main_window:
-            # Standalone mode - return None to hide this panel
-            return None
-
-        # Only create panel in IMG Factory mode
+    def _create_left_panel(self): #vers 6
+        """Left panel: RDT file browser for standalone mode."""
         panel = QFrame()
         panel.setFrameStyle(QFrame.Shape.StyledPanel)
-        panel.setMinimumWidth(200)
-        panel.setMaximumWidth(300)
+        panel.setMinimumWidth(180)
+        panel.setMaximumWidth(280)
 
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(*self.get_panel_margins())
+        layout.setSpacing(4)
 
-        header = QLabel("Ojs Files")
+        header = QLabel("Game Files")
         header.setFont(QFont("Arial", 10, QFont.Weight.Bold))
         layout.addWidget(header)
+
+        # Folder open row
+        folder_row = QHBoxLayout()
+        self.folder_path_label = QLabel("No folder")
+        self.folder_path_label.setFont(QFont("Courier New", 7))
+        self.folder_path_label.setWordWrap(True)
+        folder_open_btn = QPushButton("...")
+        folder_open_btn.setMaximumWidth(28)
+        folder_open_btn.setMaximumHeight(22)
+        folder_open_btn.setToolTip("Open stage folder")
+        folder_open_btn.clicked.connect(self._browse_stage_folder)
+        folder_row.addWidget(self.folder_path_label, stretch=1)
+        folder_row.addWidget(folder_open_btn)
+        layout.addLayout(folder_row)
+
+        # File list
+        self.col_list_widget = QListWidget()
+        self.col_list_widget.setAlternatingRowColors(True)
+        self.col_list_widget.itemClicked.connect(self._on_left_file_selected)
+        self.col_list_widget.itemDoubleClicked.connect(self._on_left_file_activated)
+        self.col_list_widget.setFont(QFont("Courier New", 8))
+        layout.addWidget(self.col_list_widget, stretch=1)
+
+        return panel
+
+    def _browse_stage_folder(self): #vers 1
+        """Open a folder of RDT files and populate the left panel list."""
+        from PyQt6.QtWidgets import QFileDialog
+        folder = QFileDialog.getExistingDirectory(self, "Open Stage Folder")
+        if folder:
+            self._load_stage_folder(folder)
+
+    def _load_stage_folder(self, folder_path: str): #vers 1
+        """Scan folder for RDT files and populate left list and stage map."""
+        import os
+        if not hasattr(self, 'col_list_widget') or not self.col_list_widget:
+            return
+        self.col_list_widget.clear()
+        if hasattr(self, 'folder_path_label'):
+            self.folder_path_label.setText(os.path.basename(folder_path))
+            self.folder_path_label.setToolTip(folder_path)
+
+        rdt_files = sorted([
+            f for f in os.listdir(folder_path) if f.upper().endswith('.RDT')
+        ])
+        for filename in rdt_files:
+            full_path = os.path.join(folder_path, filename)
+            size = os.path.getsize(full_path)
+            item = QListWidgetItem(f"{filename}  ({size}B)")
+            item.setData(Qt.ItemDataRole.UserRole, full_path)
+            self.col_list_widget.addItem(item)
+
+        # Also load into stage map editor
+        if hasattr(self, 'stage_map_editor') and self.stage_map_editor:
+            self.stage_map_editor.load_folder(folder_path)
+
+    def _on_left_file_selected(self, item): #vers 1
+        """Highlight file in list without loading."""
+        pass
+
+    def _on_left_file_activated(self, item): #vers 1
+        """Double-click: load the RDT file."""
+        file_path = item.data(Qt.ItemDataRole.UserRole)
+        if file_path:
+            self._load_rdt(file_path)
 
         self.col_list_widget = QListWidget()
         self.col_list_widget.setAlternatingRowColors(True)
@@ -1870,32 +1936,78 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         layout.addWidget(self.col_list_widget)
         return panel
 
-    def _create_middle_panel(self): #ver 1
-        panel = QGroupBox()
-        panel.setStyleSheet("""
-            QGroupBox {
-                font-weight: bold;
-                font-size: 14px;
-                border: 1px solid #3a3a3a;
-                border-radius: 1px;
-                margin-top: 10px;
-                padding-top: 10px;
-                background-color: #2b2b2b;
-            }
-        """)
+    def _create_middle_panel(self): #ver 2
+        panel = QFrame()
+        panel.setFrameStyle(QFrame.Shape.StyledPanel)
         layout = QVBoxLayout(panel)
+        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setSpacing(0)
+
+        # Tab bar: Overview / Items / Cameras / Collision
+        self.middle_tabs = QTabWidget()
+        self.middle_tabs.setTabPosition(QTabWidget.TabPosition.North)
+        self.middle_tabs.currentChanged.connect(self._on_middle_tab_changed)
+
+        # Each tab shares the same table widget via a stacked approach
+        # We use one QTableWidget and repopulate on tab change
         self.middle_list = QTableWidget()
-        self.middle_list.setColumnCount(2)
-        self.middle_list.setHorizontalHeaderLabels(["Previewp", "Details"])
         self.middle_list.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.middle_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.middle_list.setAlternatingRowColors(True)
-        self.middle_list.setIconSize(QSize(self.iconsizex, self.iconsizey))
-        self.middle_list.setColumnWidth(0, 100)
+        self.middle_list.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.middle_list.horizontalHeader().setStretchLastSection(True)
-        layout.addWidget(self.middle_list)
+        self.middle_list.doubleClicked.connect(self._on_middle_list_double_clicked)
+
+        # Wrap table in tabs
+        for tab_name in ["Overview", "Items", "Cameras", "Collision"]:
+            placeholder = QWidget()
+            self.middle_tabs.addTab(placeholder, tab_name)
+
+        layout.addWidget(self.middle_tabs)
+        layout.addWidget(self.middle_list, stretch=1)
 
         return panel
+
+    def _on_middle_tab_changed(self, index: int): #vers 1
+        """Repopulate table when middle panel tab changes."""
+        if not hasattr(self, 'current_rdt') or not self.current_rdt:
+            return
+        from apps.methods.rdt_loader import (
+            populate_room_table, populate_items_table,
+            populate_cameras_table
+        )
+        if index == 0:
+            populate_room_table(self, self.current_rdt)
+        elif index == 1:
+            populate_items_table(self, self.current_rdt)
+        elif index == 2:
+            populate_cameras_table(self, self.current_rdt)
+        elif index == 3:
+            self._populate_collision_table(self.current_rdt)
+
+    def _populate_collision_table(self, rdt): #vers 1
+        """Populate table with collision boundary data."""
+        self.middle_list.setColumnCount(5)
+        self.middle_list.setHorizontalHeaderLabels(["Type", "X1", "Z1", "X2", "Z2"])
+        self.middle_list.setRowCount(len(rdt.collision))
+        from PyQt6.QtWidgets import QTableWidgetItem
+        for row, b in enumerate(rdt.collision):
+            self.middle_list.setItem(row, 0, QTableWidgetItem(str(b.boundary_type)))
+            self.middle_list.setItem(row, 1, QTableWidgetItem(str(b.x1)))
+            self.middle_list.setItem(row, 2, QTableWidgetItem(str(b.z1)))
+            self.middle_list.setItem(row, 3, QTableWidgetItem(str(b.x2)))
+            self.middle_list.setItem(row, 4, QTableWidgetItem(str(b.z2)))
+        self.middle_list.resizeColumnsToContents()
+        self.middle_list.horizontalHeader().setStretchLastSection(True)
+
+    def _on_middle_list_double_clicked(self, index): #vers 1
+        """Double-click on item row opens item edit dialog."""
+        if not hasattr(self, 'current_rdt') or not self.current_rdt:
+            return
+        if hasattr(self, 'middle_tabs') and self.middle_tabs.currentIndex() == 1:
+            row = index.row()
+            if 0 <= row < len(self.current_rdt.items):
+                self._open_item_edit_dialog(row)
 
     def _create_right_panel(self): #vers 10
         #Create right panel with editing controls - compact layout
@@ -1926,7 +2038,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
         self.display_mode_combo = QComboBox()
         self.display_mode_combo.setFont(self.panel_font)
-        self.display_mode_combo.addItems(["Text", "Room Map", "Texture", "Collision", "Info"])
+        self.display_mode_combo.addItems(["Text", "Room Map", "Texture", "Stage Map", "Info"])
         self.display_mode_combo.setMaximumWidth(120)
         self.display_mode_combo.currentTextChanged.connect(self._on_display_mode_changed)
         mode_layout.addWidget(self.display_mode_combo)
@@ -1973,12 +2085,19 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             self.tim_viewer = None
             self.display_stack.addWidget(texture_display)
 
-        # === PAGE 3: Collision Viewer (placeholder) ===
-        collision_display = QLabel("Collision Viewer\n(Coming soon)")
-        collision_display.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        collision_display.setStyleSheet("QLabel { background-color: #1a1a1a; color: #666; }")
-        self.collision_display = collision_display
-        self.display_stack.addWidget(collision_display)
+        # === PAGE 3: Stage Map Editor ===
+        try:
+            from apps.gui.stage_map_editor import StageMapWidget
+            self.stage_map_editor = StageMapWidget(self)
+            self.stage_map_editor.room_activated.connect(self._load_rdt)
+            self.display_stack.addWidget(self.stage_map_editor)
+        except ImportError as e:
+            print(f"Warning: stage_map_editor not available: {e}")
+            col_ph = QLabel("Stage Map\n(Import error)")
+            col_ph.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            col_ph.setStyleSheet("QLabel { background-color: #1a1a1a; color: #666; }")
+            self.stage_map_editor = None
+            self.display_stack.addWidget(col_ph)
 
         # === PAGE 4: Info/Properties ===
         info_display = QLabel("Information Panel")
@@ -2500,13 +2619,13 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         return status_bar
 
 
-    def _on_display_mode_changed(self, mode): #vers 2
+    def _on_display_mode_changed(self, mode): #vers 3
         """Handle display mode change."""
         modes = {
             "Text": 0,
             "Room Map": 1,
             "Texture": 2,
-            "Collision": 3,
+            "Stage Map": 3,
             "Info": 4,
         }
         if mode in modes:
@@ -3777,53 +3896,38 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             QMessageBox.critical(self, "Load Error", f"Failed to load RDT:\n{str(e)}")
 
 
-    def _save_file(self): #vers 1
-        """Save current COL file"""
+    def _save_file(self): #vers 2
+        """Save current RDT file back to disk."""
         try:
-            if not self.current_col_file:
-                QMessageBox.warning(self, "Save", "No Obj file loaded to save")
+            if not self.current_rdt:
+                QMessageBox.warning(self, "Save", "No RDT file loaded.")
                 return
-
             if not self.current_file_path:
-                # No path yet, do Save As
                 self._save_file_as()
                 return
-
-            # Save to current path
-            if self.current_obj_file.save():
-                if self.main_window and hasattr(self.main_window, 'log_message'):
-                    self.main_window.log_message(f"Saved Ojb: {os.path.basename(self.current_file_path)}")
-
-                QMessageBox.information(self, "Save", f"Obj file saved successfully:\n{os.path.basename(self.current_file_path)}")
-                img_debugger.success(f"Saved Obj file: {self.current_file_path}")
-            else:
-                error_msg = self.current_col_file.save_error if hasattr(self.current_col_file, 'save_error') else "Unknown error"
-                QMessageBox.critical(self, "Save Error", f"Failed to save Obj file:\n{error_msg}")
-                img_debugger.error(f"Save failed: {error_msg}")
-
+            from apps.methods.rdt_writer import write_rdt
+            write_rdt(self.current_rdt, self.current_file_path)
+            self.setWindowTitle(f"ResBio-Evil Workshop: {self.current_rdt.room_id}")
+            img_debugger.debug(f"Saved RDT: {self.current_file_path}")
+            QMessageBox.information(self, "Saved",
+                f"Saved: {os.path.basename(self.current_file_path)}")
         except Exception as e:
-            img_debugger.error(f"Error saving file: {str(e)}")
-            QMessageBox.critical(self, "Error", f"Failed to save file:\n{str(e)}")
+            img_debugger.error(f"Save error: {e}")
+            QMessageBox.critical(self, "Save Error", f"Failed to save:\n{e}")
 
-
-    def _save_file_as(self): #vers 1
-        """Save As dialog"""
+    def _save_file_as(self): #vers 2
+        """Save RDT to a new path."""
         try:
             file_path, _ = QFileDialog.getSaveFileName(
-                self,
-                "Save Obj File As",
-                "",
-                "Obj Files (*.col);;All Files (*)"
+                self, "Save RDT As", "",
+                "RDT Room Files (*.rdt *.RDT);;All Files (*)"
             )
-
             if file_path:
                 self.current_file_path = file_path
-                self.current_col_file.file_path = file_path
                 self._save_file()
-
         except Exception as e:
-            img_debugger.error(f"Error in save as dialog: {str(e)}")
-            QMessageBox.critical(self, "Error", f"Failed to save file:\n{str(e)}")
+            img_debugger.error(f"Save as error: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to save:\n{e}")
 
 
     def _load_settings(self): #vers 1
@@ -4697,6 +4801,35 @@ class ResBioEvilWorkshop(QWidget): #ver 1
                 from apps.methods.rdt_loader import populate_cameras_table
                 populate_cameras_table(self, self.current_rdt)
                 self.middle_list.selectRow(camera_index)
+
+    def _open_item_edit_dialog(self, item_index: int): #vers 1
+        """Open dialog to edit an RDT item's type, position and amount."""
+        if not self.current_rdt or item_index >= len(self.current_rdt.items):
+            return
+        from apps.gui.item_edit_dialog import ItemEditDialog
+        item = self.current_rdt.items[item_index]
+        dialog = ItemEditDialog(item, self)
+        if dialog.exec():
+            # Dialog applied changes directly to item object
+            if hasattr(self, 'room_map_editor') and self.room_map_editor:
+                self.room_map_editor.map_editor.update()
+            from apps.methods.rdt_loader import populate_items_table
+            populate_items_table(self, self.current_rdt)
+            if hasattr(self, 'save_btn'):
+                self.save_btn.setEnabled(True)
+
+    def _open_tim_file(self): #vers 1
+        """Open a TIM texture file directly."""
+        try:
+            file_path, _ = QFileDialog.getOpenFileName(
+                self, "Open TIM Texture", "",
+                "TIM Texture Files (*.tim *.TIM);;All Files (*)"
+            )
+            if file_path:
+                self.show_tim_file(file_path)
+        except Exception as e:
+            img_debugger.error(f"TIM open error: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to open TIM:\n{e}")
 
     def _on_map_item_moved(self, item_index: int, new_x: int, new_z: int): #vers 1
         """Handle item drag in the room map editor - marks file as modified."""
