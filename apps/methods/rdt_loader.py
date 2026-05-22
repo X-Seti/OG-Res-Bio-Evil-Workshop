@@ -65,6 +65,10 @@ def load_rdt_file(main_window: 'ResBioEvilWorkshop', file_path: str) -> Optional
     if hasattr(main_window, 'save_btn'):
         main_window.save_btn.setEnabled(rdt.valid)
 
+    # Trigger floor plan update
+    if hasattr(main_window, 'floor_plan') and main_window.floor_plan:
+        main_window.floor_plan.load_rdt(rdt, rdt.room_id)
+
     # Trigger map editor update
     if hasattr(main_window, 'room_map_editor'):
         main_window.room_map_editor.load_rdt(rdt)

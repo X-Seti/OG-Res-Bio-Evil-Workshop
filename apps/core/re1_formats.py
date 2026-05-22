@@ -107,6 +107,8 @@ class RDTFile: #vers 1
     cameras: List[RDTCamera] = field(default_factory=list)
     items: List[RDTItem] = field(default_factory=list)
     collision: List[RDTCollisionBoundary] = field(default_factory=list)
+    sca_counts: List[int] = field(default_factory=list)  # [floors, slopes, walls, doors, other]
+    sca_ceiling: tuple = field(default_factory=tuple)    # (ceiling_x, ceiling_z)
     parse_errors: List[str] = field(default_factory=list)
     valid: bool = False
 
@@ -382,6 +384,8 @@ def _parse_rdt_collision(rdt: RDTFile, data: bytes, size: int): #vers 1
 
     ceiling_x, ceiling_z = struct.unpack_from('<HH', data, col_offset)
     counts = list(struct.unpack_from('<5I', data, col_offset + 4))
+    rdt.sca_counts = counts
+    rdt.sca_ceiling = (ceiling_x, ceiling_z)
 
     # Boundary entries: 16 bytes each
     # type(2) x1(2) z1(2) x2(2) z2(2) floor(1) density(1) sound(1) pad(1) ... varies

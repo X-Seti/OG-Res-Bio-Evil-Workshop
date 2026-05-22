@@ -1916,8 +1916,8 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         if folder:
             self._load_stage_folder(folder)
 
-    def _load_stage_folder(self, folder_path: str): #vers 1
-        """Scan folder for RDT files and populate left list and stage map."""
+    def _load_stage_folder(self, folder_path: str): #vers 2
+        """Scan folder for RDT files and populate left list, stage map and floor plan."""
         import os
         if not hasattr(self, 'col_list_widget') or not self.col_list_widget:
             return
@@ -1936,13 +1936,40 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             item.setData(Qt.ItemDataRole.UserRole, full_path)
             self.col_list_widget.addItem(item)
 
-        # Also load into stage map editor
+        # Load into stage map editor
         if hasattr(self, 'stage_map_editor') and self.stage_map_editor:
             self.stage_map_editor.load_folder(folder_path)
+
+        # Load all RDTs into floor plan for full stage view
+        if hasattr(self, 'floor_plan') and self.floor_plan:
+            from apps.core.re1_formats import parse_rdt
+            rdt_pairs = []
+            for filename in rdt_files:
+                full_path = os.path.join(folder_path, filename)
+                room_id = os.path.splitext(filename)[0].upper()
+                try:
+                    rdt = parse_rdt(full_path)
+                    if rdt.valid:
+                        rdt_pairs.append((room_id, rdt))
+                except Exception:
+                    pass
+            if rdt_pairs:
+                self.floor_plan.load_stage(rdt_pairs)
 
     def _on_left_file_selected(self, item): #vers 1
         """Highlight file in list without loading."""
         pass
+
+    def _on_floor_plan_room_clicked(self, room_id: str): #vers 1
+        """Click on floor plan room area - load it and stay on floor plan."""
+        if not hasattr(self, 'stage_map_editor') or not self.stage_map_editor:
+            return
+        graph = self.stage_map_editor.canvas.graph
+        if not graph:
+            return
+        node = graph.rooms.get(room_id)
+        if node and node.file_path:
+            self._load_rdt(node.file_path)
 
     def _on_stage_room_activated(self, file_path: str): #vers 1
         """Double-click in stage map: load RDT and switch to Room Map view."""
@@ -2082,7 +2109,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
         self.display_mode_combo = QComboBox()
         self.display_mode_combo.setFont(self.panel_font)
-        self.display_mode_combo.addItems(["Text", "Room Map", "Texture", "Stage Map", "Info"])
+        self.display_mode_combo.addItems(["Text", "Room Map", "Texture", "Stage Map", "Floor Plan", "Info"])
         self.display_mode_combo.setMaximumWidth(120)
         self.display_mode_combo.currentTextChanged.connect(self._on_display_mode_changed)
         mode_layout.addWidget(self.display_mode_combo)
@@ -2144,7 +2171,22 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             self.stage_map_editor = None
             self.display_stack.addWidget(col_ph)
 
-        # === PAGE 4: Info/Properties ===
+        # === PAGE 4: Floor Plan ===
+        try:
+            from apps.gui.floor_plan import FloorPlanWidget
+            self.floor_plan = FloorPlanWidget(self)
+            self.floor_plan.room_clicked.connect(self._on_floor_plan_room_clicked)
+            self.floor_plan.item_clicked.connect(self._on_map_item_selected)
+            self.display_stack.addWidget(self.floor_plan)
+        except ImportError as e:
+            print(f"Warning: floor_plan not available: {e}")
+            fp_ph = QLabel("Floor Plan\n(Import error)")
+            fp_ph.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            fp_ph.setStyleSheet("QLabel { background-color: #000; color: #444; }")
+            self.floor_plan = None
+            self.display_stack.addWidget(fp_ph)
+
+        # === PAGE 5: Info/Properties ===
         info_display = QLabel("Information Panel")
         info_display.setAlignment(Qt.AlignmentFlag.AlignCenter)
         info_display.setStyleSheet("QLabel { background-color: #1a1a1a; color: #666; }")
@@ -2664,14 +2706,15 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         return status_bar
 
 
-    def _on_display_mode_changed(self, mode): #vers 3
+    def _on_display_mode_changed(self, mode): #vers 4
         """Handle display mode change."""
         modes = {
-            "Text": 0,
-            "Room Map": 1,
-            "Texture": 2,
-            "Stage Map": 3,
-            "Info": 4,
+            "Text":       0,
+            "Room Map":   1,
+            "Texture":    2,
+            "Stage Map":  3,
+            "Floor Plan": 4,
+            "Info":       5,
         }
         if mode in modes:
             self.display_stack.setCurrentIndex(modes[mode])
