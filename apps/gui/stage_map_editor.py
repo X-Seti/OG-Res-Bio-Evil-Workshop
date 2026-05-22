@@ -20,6 +20,7 @@ from PyQt6.QtGui import (
     QWheelEvent, QMouseEvent, QKeyEvent, QFontMetrics
 )
 
+from PyQt6.QtGui import QImage
 from apps.core.re1_room_map import (
     StageGraph, RoomNode, scan_stage_folder, swap_rooms, remove_room
 )
@@ -51,40 +52,12 @@ from apps.core.re1_room_map import (
 ##class StageMapWidget:
 
 
-# RE1 known room names by room ID pattern
-# Key format: last 3 chars of room_id (stage+index hex) e.g. "000", "100", "200"
-RE1_ROOM_NAMES: Dict[str, str] = {
-    # Stage 0 - Spencer Mansion
-    "000": "Intro / Outside",
-    "001": "Main Hall",
-    "002": "Dining Room",
-    "003": "West Hallway",
-    "004": "Stairs",
-    "005": "Art Gallery",
-    "006": "Drawing Room",
-    "007": "East Hallway",
-    "008": "Changing Room",
-    "009": "Library",
-    "00A": "Bathroom",
-    "00B": "Master Bedroom",
-    "00C": "Guard Room",
-    "00D": "Storage Room",
-    "00E": "Courtyard",
-    "00F": "Greenhouse",
-    # Stage 1
-    "100": "Basement",
-    "101": "Lab Entrance",
-    "102": "Corridor",
-    "103": "Research Lab",
-    "104": "Power Room",
-    "105": "Elevator",
-    # Stage 2 - RE2 Police Dept (placeholder)
-    "200": "Front Entrance",
-    "201": "Main Office",
-    "202": "Dark Room",
-    "203": "Interrogation",
-    "204": "S.T.A.R.S. Office",
-}
+# Room names loaded from central database
+try:
+    from apps.core.re_room_names import get_room_name_or_id as _get_room_name_or_id
+except ImportError:
+    def _get_room_name_or_id(room_id: str) -> str:
+        return room_id
 
 # Colors
 COL_BG          = QColor(14, 16, 20)
@@ -110,10 +83,9 @@ THUMB_H     = 36   # height of thumbnail area inside box
 ARROW_SIZE  = 8
 
 
-def _get_room_name(room_id: str) -> str: #vers 1
+def _get_room_name(room_id: str) -> str: #vers 2
     """Return human-readable name for a room ID, or the raw ID."""
-    key = room_id.upper().replace("ROOM", "")[-3:]
-    return RE1_ROOM_NAMES.get(key, room_id)
+    return _get_room_name_or_id(room_id)
 
 
 class StageMapCanvas(QWidget): #vers 1
@@ -134,6 +106,9 @@ class StageMapCanvas(QWidget): #vers 1
         self._panning = False
         self._swap_pending: Optional[str] = None
 
+        self._thumb_cache: Dict[str, Optional[object]] = {}  # room_id -> QPixmap or None
+        self._thumb_loading: set = set()   # room_ids currently loading
+
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setStyleSheet("background-color: #0e1014;")
@@ -144,6 +119,8 @@ class StageMapCanvas(QWidget): #vers 1
         self._selected_room = None
         self._swap_pending = None
         self._hovered_room = None
+        self._thumb_cache.clear()
+        self._thumb_loading.clear()
         self.reset_view()
         self.update()
 
@@ -335,15 +312,24 @@ class StageMapCanvas(QWidget): #vers 1
 
         # Thumbnail strip at top
         thumb_rect = QRect(rect.left() + 1, rect.top() + 1, rect.width() - 2, th)
-        painter.setBrush(QBrush(COL_THUMB_BG))
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawRect(thumb_rect)
 
-        # Thumbnail placeholder text
-        if self._zoom >= 0.5:
-            painter.setPen(QPen(QColor(50, 65, 85)))
-            painter.setFont(QFont("Courier New", max(6, int(7 * self._zoom))))
-            painter.drawText(thumb_rect, Qt.AlignmentFlag.AlignCenter, "[cam]")
+        # Try to paint cached thumbnail
+        pixmap = self._thumb_cache.get(room_id)
+        if pixmap is not None and not isinstance(pixmap, bool):
+            # Draw the pixmap scaled to thumb_rect
+            painter.drawPixmap(thumb_rect, pixmap)
+        else:
+            painter.setBrush(QBrush(COL_THUMB_BG))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawRect(thumb_rect)
+            if self._zoom >= 0.4:
+                painter.setPen(QPen(QColor(50, 65, 85)))
+                painter.setFont(QFont("Courier New", max(5, int(6 * self._zoom))))
+                msg = "loading..." if room_id in self._thumb_loading else "[no bg]"
+                painter.drawText(thumb_rect, Qt.AlignmentFlag.AlignCenter, msg)
+            # Trigger async load if not already attempted
+            if pixmap is None and room_id not in self._thumb_loading:
+                self._request_thumbnail(room_id, node)
 
         # Divider line between thumb and text area
         painter.setPen(QPen(border.darker(150), 1))
@@ -380,6 +366,63 @@ class StageMapCanvas(QWidget): #vers 1
             painter.drawText(stats_rect,
                              Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft,
                              stats)
+
+    def _request_thumbnail(self, room_id: str, node): #vers 1
+        """Request thumbnail load for a room node. Runs in a thread."""
+        from PyQt6.QtCore import QThread, QObject, pyqtSignal as _sig
+
+        if not node or not node.file_path:
+            self._thumb_cache[room_id] = False  # mark as attempted/failed
+            return
+
+        self._thumb_loading.add(room_id)
+
+        class ThumbWorker(QObject):
+            done = _sig(str, object)  # room_id, QPixmap or None
+            def __init__(self, rid, path):
+                super().__init__()
+                self._rid = rid
+                self._path = path
+            def run(self):
+                try:
+                    from apps.core.re_backgrounds import find_backgrounds_for_rdt, load_background
+                    from PyQt6.QtGui import QImage, QPixmap
+                    paths = find_backgrounds_for_rdt(self._path)
+                    if not paths:
+                        self.done.emit(self._rid, None)
+                        return
+                    bg = load_background(paths[0])
+                    if not bg.valid or not bg.rgba_data:
+                        self.done.emit(self._rid, None)
+                        return
+                    img = QImage(bg.rgba_data, bg.width, bg.height,
+                                 bg.width * 4, QImage.Format.Format_RGBA8888)
+                    self.done.emit(self._rid, QPixmap.fromImage(img))
+                except Exception as e:
+                    self.done.emit(self._rid, None)
+
+        worker = ThumbWorker(room_id, node.file_path)
+        thread = QThread()
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.done.connect(lambda rid, px: self._on_thumbnail_loaded(rid, px, thread))
+        worker.done.connect(thread.quit)
+
+        # Keep references alive
+        if not hasattr(self, '_thumb_threads'):
+            self._thumb_threads = []
+        self._thumb_threads.append((thread, worker))
+        thread.start()
+
+    def _on_thumbnail_loaded(self, room_id: str, pixmap, thread): #vers 1
+        """Called when thumbnail load finishes."""
+        self._thumb_loading.discard(room_id)
+        self._thumb_cache[room_id] = pixmap if pixmap is not None else False
+        # Clean up dead threads
+        if hasattr(self, '_thumb_threads'):
+            self._thumb_threads = [(t, w) for t, w in self._thumb_threads
+                                   if t.isRunning()]
+        self.update()
 
     def _draw_status(self, painter: QPainter): #vers 1
         if not self.graph:
