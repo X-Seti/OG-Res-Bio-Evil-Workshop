@@ -111,13 +111,15 @@ if STANDALONE_MODE:
 
         class img_debugger:
             @staticmethod
-            def debug(msg): print(f"DEBUG: {msg}")
+            def debug(msg, *a): print(f"DEBUG: {msg}")
             @staticmethod
-            def error(msg): print(f"ERROR: {msg}")
+            def info(msg, *a): print(f"INFO: {msg}")
             @staticmethod
-            def warning(msg): print(f"WARNING: {msg}")
+            def error(msg, *a): print(f"ERROR: {msg}")
             @staticmethod
-            def success(msg): print(f"SUCCESS: {msg}")
+            def warning(msg, *a): print(f"WARNING: {msg}")
+            @staticmethod
+            def success(msg, *a): print(f"SUCCESS: {msg}")
 
         # Minimal COL classes
         class COLFile:
@@ -193,13 +195,15 @@ class TEXVersion: COL_1 = None
 
 class img_debugger:
     @staticmethod
-    def debug(msg): pass
+    def debug(msg, *a): pass
     @staticmethod
-    def error(msg): pass
+    def info(msg, *a): pass
     @staticmethod
-    def warning(msg): pass
+    def error(msg, *a): pass
     @staticmethod
-    def success(msg): pass
+    def warning(msg, *a): pass
+    @staticmethod
+    def success(msg, *a): pass
 
 
 # - GUI SHELL ONLY BELOW
