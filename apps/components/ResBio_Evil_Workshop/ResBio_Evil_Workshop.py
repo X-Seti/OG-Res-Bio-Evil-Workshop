@@ -137,7 +137,7 @@ else:
             get_export_icon, get_import_icon, get_settings_icon,
             get_view_icon, get_edit_icon
         )
-        from apps.debug.debug_functions import img_debugger
+        from depends.img_debug_functions import img_debugger
     except ImportError as e:
         print(f"Warning: Missing docked mode imports: {e}")
         # This shouldn't happen in docked mode, but provide fallback
