@@ -1446,7 +1446,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
         # Apply to ALL titlebar buttons
         titlebar_buttons = [
-            'settings_btn', 'scan_bios_btn', 'scan_roms_btn', 'save_btn', 'controller_btn',
+            'settings_btn', 'save_btn', 'controller_btn',
             'properties_btn', 'minimize_btn', 'maximize_btn', 'close_btn'
         ]
 
@@ -1711,9 +1711,20 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             self.save_btn.setFixedSize(self.iconsizex, self.iconsizey)
 
         self.save_btn.setEnabled(False)  # Enable when modified
-        self.save_btn.setToolTip("Save COL file (Ctrl+S)")
+        self.save_btn.setToolTip("Save RDT file (Ctrl+S)")
         self.save_btn.clicked.connect(self._save_file)
         layout.addWidget(self.save_btn)
+
+        # Export JSON button
+        self.export_btn = QPushButton()
+        self.export_btn.setFont(self.button_font)
+        self.export_btn.setIcon(ResBioSVGIcons.export_icon())
+        self.export_btn.setText("Export")
+        self.export_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
+        self.export_btn.setToolTip("Export room data to JSON")
+        self.export_btn.setEnabled(False)
+        self.export_btn.clicked.connect(self._export_room_json)
+        layout.addWidget(self.export_btn)
 
         # Save button
         self.saveall_btn = QPushButton()
@@ -1826,7 +1837,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             self.tearoff_btn.setMinimumWidth(self.gadiconsizex)
             self.tearoff_btn.setMaximumWidth(self.gadiconsizey)
             self.tearoff_btn.clicked.connect(self._toggle_tearoff)
-            self.tearoff_btn.setToolTip("TXD Workshop - Tearoff window")
+            self.tearoff_btn.setToolTip("Tearoff window")
             self.tearoff_btn.setStyleSheet("""
                 QPushButton {
                     font-weight: bold;
@@ -2129,7 +2140,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
         self.display_mode_combo = QComboBox()
         self.display_mode_combo.setFont(self.panel_font)
-        self.display_mode_combo.addItems(["Text", "Room Map", "Texture", "Stage Map", "Floor Plan", "Info"])
+        self.display_mode_combo.addItems(["Text", "Room Map", "Texture", "Stage Map", "Floor Plan", "Model", "Scripts", "Info"])
         self.display_mode_combo.setMaximumWidth(120)
         self.display_mode_combo.currentTextChanged.connect(self._on_display_mode_changed)
         mode_layout.addWidget(self.display_mode_combo)
@@ -2206,7 +2217,33 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             self.floor_plan = None
             self.display_stack.addWidget(fp_ph)
 
-        # === PAGE 5: Info/Properties ===
+        # === PAGE 5: EMD Model Viewer ===
+        try:
+            from apps.gui.emd_viewer import EMDViewerWidget
+            self.emd_viewer = EMDViewerWidget(self)
+            self.display_stack.addWidget(self.emd_viewer)
+        except ImportError as e:
+            print(f"Warning: emd_viewer not available: {e}")
+            emd_ph = QLabel("EMD Model Viewer\n(Import error)")
+            emd_ph.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            emd_ph.setStyleSheet("QLabel { background-color: #0e1014; color: #444; }")
+            self.emd_viewer = None
+            self.display_stack.addWidget(emd_ph)
+
+        # === PAGE 6: SCD Script Browser ===
+        try:
+            from apps.gui.scd_browser import SCDBrowser
+            self.scd_browser = SCDBrowser(self)
+            self.display_stack.addWidget(self.scd_browser)
+        except ImportError as e:
+            print(f"Warning: scd_browser not available: {e}")
+            scd_ph = QLabel("SCD Script Browser\n(Import error)")
+            scd_ph.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            scd_ph.setStyleSheet("QLabel { background-color: #0c1210; color: #444; }")
+            self.scd_browser = None
+            self.display_stack.addWidget(scd_ph)
+
+        # === PAGE 7: Info/Properties ===
         info_display = QLabel("Information Panel")
         info_display.setAlignment(Qt.AlignmentFlag.AlignCenter)
         info_display.setStyleSheet("QLabel { background-color: #1a1a1a; color: #666; }")
@@ -2726,7 +2763,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         return status_bar
 
 
-    def _on_display_mode_changed(self, mode): #vers 4
+    def _on_display_mode_changed(self, mode): #vers 5
         """Handle display mode change."""
         modes = {
             "Text":       0,
@@ -2734,7 +2771,9 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             "Texture":    2,
             "Stage Map":  3,
             "Floor Plan": 4,
-            "Info":       5,
+            "Model":      5,
+            "Scripts":    6,
+            "Info":       7,
         }
         if mode in modes:
             self.display_stack.setCurrentIndex(modes[mode])
@@ -4919,6 +4958,24 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             populate_items_table(self, self.current_rdt)
             if hasattr(self, 'save_btn'):
                 self.save_btn.setEnabled(True)
+
+    def _export_room_json(self): #vers 1
+        """Export current RDT to JSON."""
+        if not self.current_rdt:
+            return
+        from PyQt6.QtWidgets import QFileDialog
+        default = f"{self.current_rdt.room_id}.json"
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export Room JSON", default,
+            "JSON Files (*.json);;All Files (*)")
+        if path:
+            try:
+                from apps.methods.rdt_loader import export_room_to_json
+                export_room_to_json(self.current_rdt, path)
+                img_debugger.debug(f"Exported: {path}")
+                QMessageBox.information(self, "Exported", f"Saved to:\n{path}")
+            except Exception as e:
+                QMessageBox.critical(self, "Export Error", str(e))
 
     def _open_disc_manager(self): #vers 1
         """Open the disc image manager dialog."""

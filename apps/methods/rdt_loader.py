@@ -73,6 +73,14 @@ def load_rdt_file(main_window: 'ResBioEvilWorkshop', file_path: str) -> Optional
     if hasattr(main_window, 'floor_plan') and main_window.floor_plan:
         main_window.floor_plan.load_rdt(rdt, rdt.room_id)
 
+    # Trigger SCD browser update
+    if hasattr(main_window, 'scd_browser') and main_window.scd_browser:
+        main_window.scd_browser.load_rdt(rdt)
+
+    # Enable export button
+    if hasattr(main_window, 'export_btn'):
+        main_window.export_btn.setEnabled(rdt.valid)
+
     # Trigger map editor update
     if hasattr(main_window, 'room_map_editor'):
         main_window.room_map_editor.load_rdt(rdt)
@@ -258,3 +266,104 @@ def _offset_summary(rdt: RDTFile) -> str: #vers 1
         return ""
     nonzero = sum(1 for o in rdt.header.offsets if o != 0)
     return f"{nonzero}/19 active"
+
+
+def extract_embedded_tims(rdt: RDTFile) -> list: #vers 1
+    """Extract TIM textures embedded in RDT offset[3] (TMD/TIM pairs).
+    Returns list of TIMFile objects.
+    """
+    from apps.core.re1_formats import parse_tim
+    import tempfile, os, struct
+
+    tims = []
+    if not rdt.header or not rdt.raw_data:
+        return tims
+
+    # RE1: offset[3] = TMD/TIM table. Each entry is 8 bytes: tmd_offset(4) + tim_offset(4)
+    offsets = rdt.header.offsets
+    if len(offsets) < 4:
+        return tims
+
+    tim_table_offset = offsets[3]
+    if tim_table_offset == 0 or tim_table_offset >= len(rdt.raw_data):
+        return tims
+
+    data = rdt.raw_data
+    size = len(data)
+    off  = tim_table_offset
+
+    # Scan for TIM magic (0x10 0x00 0x00 0x00) from this offset
+    TIM_MAGIC = b'\x10\x00\x00\x00'
+    search_end = min(off + 65536, size - 4)
+
+    found_offsets = []
+    pos = off
+    while pos < search_end:
+        idx = data.find(TIM_MAGIC, pos, search_end)
+        if idx < 0:
+            break
+        found_offsets.append(idx)
+        pos = idx + 4
+
+    for tim_off in found_offsets:
+        try:
+            with tempfile.NamedTemporaryFile(suffix='.tim', delete=False) as f:
+                f.write(data[tim_off:])
+                tmp = f.name
+            tim = parse_tim(tmp)
+            os.unlink(tmp)
+            if tim.valid:
+                tims.append(tim)
+        except Exception:
+            pass
+
+    return tims
+
+
+def export_room_to_json(rdt: RDTFile, output_path: str): #vers 1
+    """Export room data to JSON for external editing."""
+    import json
+    from apps.core.re1_formats import get_item_name
+
+    doc = {
+        "room_id":    rdt.room_id,
+        "file":       rdt.file_path,
+        "file_size":  rdt.file_size,
+        "cameras": [
+            {
+                "index": i,
+                "from":  list(cam.from_pos),
+                "to":    list(cam.to_pos),
+                "masks_offset": cam.masks_offset,
+            }
+            for i, cam in enumerate(rdt.cameras)
+        ],
+        "items": [
+            {
+                "index":      i,
+                "type_id":    f"0x{item.item_type:02X}",
+                "name":       get_item_name(item.item_type),
+                "x": item.x, "y": item.y, "z": item.z,
+                "rotation":   item.rotation,
+                "amount":     item.amount,
+                "flags":      item.flags,
+            }
+            for i, item in enumerate(rdt.items)
+        ],
+        "collision": [
+            {
+                "index":         i,
+                "boundary_type": b.boundary_type,
+                "x1": b.x1, "z1": b.z1,
+                "x2": b.x2, "z2": b.z2,
+                "floor":         b.floor,
+            }
+            for i, b in enumerate(rdt.collision)
+        ],
+        "offsets": [f"0x{o:08X}" for o in (rdt.header.offsets if rdt.header else [])],
+        "sca_counts": rdt.sca_counts,
+    }
+
+    with open(output_path, 'w', encoding='utf-8') as f:
+        json.dump(doc, f, indent=2)
+    return output_path
