@@ -21,6 +21,11 @@ from PyQt6.QtCore import Qt, pyqtSignal, QSize, QPoint, QRect, QTimer
 from PyQt6.QtGui import (
     QFont, QIcon, QPixmap, QColor, QPainter, QPen, QBrush, QAction, QCursor, QKeySequence, QPainterPath)
 
+# Add depends/ folder to path so bare 'depends.x' imports work
+_component_dir = os.path.dirname(os.path.abspath(__file__))
+if _component_dir not in sys.path:
+    sys.path.insert(0, _component_dir)
+
 from depends.svg_icon_factory import SVGIconFactory
 
 # Import AppSettings
