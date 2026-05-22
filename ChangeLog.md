@@ -109,3 +109,29 @@ First time exploring RE1 file formats. reevengi-tools provides excellent referen
 - [ ] _save_file: implement RDT write-back
 - [ ] Texture viewer (TIM display in display stack page 2)
 - [ ] EMD model viewer
+
+### May 22 2026 - Session continued
+
+#### New Files
+- **apps/gui/tim_viewer.py** v1 - PSX TIM texture viewer
+  - TIMCanvas: pan/zoom QPainter widget
+  - TIMViewerWidget: canvas + toolbar (Fit, +/- zoom)
+  - load_tim_file(path) and load_tim_data(TIMFile)
+  - Wired into display stack page 2 ("Texture")
+
+#### Modified Files
+- **ResBio_Evil_Workshop.py**
+  - Display stack page 2: TIMViewerWidget (was placeholder)
+  - show_texture(): uses real TIMViewerWidget
+  - show_tim_file(): new method, load TIM by path
+
+#### Verified
+- RDT parser: cameras, items (terminator), collision all parse correctly
+- All 5 modules import cleanly
+- All syntax checks pass
+
+#### TODO
+- [ ] Test with real .rdt and .tim files from RE1 game
+- [ ] _save_file: RDT write-back (modify items, export)
+- [ ] Middle panel: tab-switch between overview/items/cameras views
+- [ ] EMD model viewer (display stack page - future)
