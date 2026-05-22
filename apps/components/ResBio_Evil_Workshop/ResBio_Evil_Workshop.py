@@ -1670,6 +1670,16 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         self.open_tim_btn.clicked.connect(self._open_tim_file)
         layout.addWidget(self.open_tim_btn)
 
+        # Unpack button
+        self.unpack_btn = QPushButton()
+        self.unpack_btn.setFont(self.button_font)
+        self.unpack_btn.setIcon(ResBioSVGIcons.package_icon())
+        self.unpack_btn.setText("Unpack")
+        self.unpack_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
+        self.unpack_btn.setToolTip("Unpack RE game files (PAK/PRS/BSS/ROFS/BIN)")
+        self.unpack_btn.clicked.connect(self._open_unpack_dialog)
+        layout.addWidget(self.unpack_btn)
+
         # Save button
         self.save_btn = QPushButton()
         self.save_btn.setFont(self.button_font)
@@ -4842,6 +4852,27 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             populate_items_table(self, self.current_rdt)
             if hasattr(self, 'save_btn'):
                 self.save_btn.setEnabled(True)
+
+    def _open_unpack_dialog(self): #vers 1
+        """Open the RE file unpacker dialog."""
+        try:
+            from apps.gui.unpack_dialog import UnpackDialog
+            if not hasattr(self, '_unpack_dialog') or self._unpack_dialog is None:
+                self._unpack_dialog = UnpackDialog(self)
+                self._unpack_dialog.files_extracted.connect(self._on_files_extracted)
+            self._unpack_dialog.show()
+            self._unpack_dialog.raise_()
+        except Exception as e:
+            img_debugger.error(f"Unpack dialog error: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to open unpacker:\n{str(e)}")
+
+    def _on_files_extracted(self, output_dir: str): #vers 1
+        """After extraction: offer to open the output folder as stage folder."""
+        reply = QMessageBox.question(self, "Extraction Complete",
+            f"Files extracted to:\n{output_dir}\n\nOpen as stage folder?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if reply == QMessageBox.StandardButton.Yes:
+            self._load_stage_folder(output_dir)
 
     def _open_tim_file(self): #vers 1
         """Open a TIM texture file directly."""
