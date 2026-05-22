@@ -185,3 +185,57 @@ Plan:
 ### File browser
 - [ ] Left panel: folder browser for game directory, lists all .rdt files by stage
 - [ ] Shows room IDs, file sizes, item counts at a glance
+
+---
+
+## May 22 2026 - Session 4 (all TODOs completed)
+
+### New Files
+
+- **apps/core/re1_room_map.py** v1
+  - `scan_stage_folder()` - scans folder for .rdt files, builds StageGraph
+  - `build_stage_graph()` - parses camera switch tables for door connections
+  - `parse_camera_switches()` - reads RDT offset[0] switch entries
+  - `swap_rooms()` - swaps two rooms, patches raw binary switch bytes
+  - `remove_room()` - removes room and orphans its connections
+  - `get_connected_rooms()` - returns list of directly connected rooms
+  - Dataclasses: RoomConnection, RoomNode, StageGraph
+
+- **apps/gui/stage_map_editor.py** v1
+  - StageMapCanvas: QPainter room boxes with connection arrows, pan/zoom/drag
+  - Right-click menu: load room, swap with another, remove from stage
+  - Drag rooms to reposition. Double-click to load in room map editor.
+  - StageMapToolbar: open folder button, status bar
+  - StageMapWidget: combined, room_activated signal -> _load_rdt
+
+- **apps/gui/item_edit_dialog.py** v1
+  - Edit item type (combo with all 70+ RE1 items), amount, flags, X/Y/Z, rotation
+  - Opens via double-click on Items tab row
+  - Writes changes directly to RDTItem object
+
+- **apps/methods/rdt_writer.py** v1
+  - `write_rdt()` - patches items and collision sections in raw bytes
+  - `_backup_file()` - auto-creates .bak before first overwrite
+  - Only rewrites changed sections, all other bytes preserved verbatim
+
+### Modified Files
+
+- **ResBio_Evil_Workshop.py**
+  - Middle panel: QTabWidget with Overview/Items/Cameras/Collision tabs
+  - `_on_middle_tab_changed()`: repopulate table per tab
+  - `_populate_collision_table()`: new
+  - `_on_middle_list_double_clicked()`: opens item edit dialog on Items tab
+  - `_save_file/_save_file_as`: rewritten for RDT (were referencing COL/OBJ)
+  - `_open_tim_file()`: opens TIM texture directly; TIM button added to toolbar
+  - Display stack page 3: StageMapWidget (replaced collision placeholder)
+  - Display combo: "Stage Map" replaces "Collision"
+  - `_create_left_panel()` v6: full file browser, folder open button, RDT list
+  - `_browse_stage_folder()`, `_load_stage_folder()`: scan and populate
+  - `_on_left_file_activated()`: double-click loads RDT
+
+### TODO - Next session
+- [ ] Test with real RE1 game files
+- [ ] Wire TIM from embedded RDT offset[3] (view textures from inside RDT)
+- [ ] EMD wireframe viewer (vertex/face, QPainter, page 5)
+- [ ] SCD script hex browser
+- [ ] Export room data to JSON for external editing
