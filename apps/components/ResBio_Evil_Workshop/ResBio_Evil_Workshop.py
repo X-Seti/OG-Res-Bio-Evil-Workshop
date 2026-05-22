@@ -68,9 +68,13 @@ def _is_standalone():
 
 STANDALONE_MODE = _is_standalone()
 
-App_name = "ResBio-Evil Workshop"
-App_build = "December 11 - "
-App_auth = "X-Seti"
+try:
+    from apps.version import APP_NAME as App_name, APP_VERSION as App_version, APP_BUILD as App_build, APP_AUTHOR as App_auth
+except ImportError:
+    App_name    = "ResBio-Evil Workshop"
+    App_version = "0.6"
+    App_build   = "May 22 2026"
+    App_auth    = "X-Seti"
 
 
 # Conditional imports based on mode
@@ -444,7 +448,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         self.resize_corner = None
         self.corner_size = 20
         self.hover_corner = None
-        self.setWindowTitle(App_name + ": No File")
+        self.setWindowTitle(f"{App_name} v{App_version} (build {App_build}): No File Loaded")
         self.resize(1400, 800)
         self.setMouseTracking(True)
         self.dock_display_mode = None
@@ -2826,28 +2830,22 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         return settings_btn
 
 
-    def _show_settings_dialog(self): #vers 6
+    def _show_settings_dialog(self): #vers 7
         """Show settings dialog - tries app_settings_system.py first, falls back to built-in"""
         try:
-            # Try to import from apps/utils/app_settings_system.py
             from apps.utils.app_settings_system import AppSettings, SettingsDialog
-            
-            # Load AppSettings
-            if not hasattr(self, 'app_settings'):
+            if not hasattr(self, 'app_settings') or self.app_settings is None:
                 self.app_settings = AppSettings()
-            
-            # Show the full SettingsDialog from app_settings_system
+            if self.app_settings is None:
+                raise AttributeError("AppSettings() returned None")
             dialog = SettingsDialog(self.app_settings, self)
             if dialog.exec():
-                # Apply settings and refresh UI
                 self._on_theme_changed()
                 if self.main_window and hasattr(self.main_window, 'log_message'):
                     self.main_window.log_message("Settings saved and applied")
             return
-            
-        except ImportError:
-            # Fallback: Use built-in settings dialog
-            print("WARNING: app_settings_system.py not found, using fallback settings dialog")
+        except (ImportError, AttributeError, Exception) as e:
+            print(f"Settings dialog fallback: {e}")
             self._show_settings_dialog_fallback()
     def _show_settings_dialog_fallback(self): #vers 1
         """Fallback built-in settings dialog (basic display/preview settings)"""

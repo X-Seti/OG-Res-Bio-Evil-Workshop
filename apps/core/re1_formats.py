@@ -13,6 +13,11 @@ from typing import List, Optional, Tuple
 
 ##Methods list -
 # parse_rdt
+# _detect_rdt_version
+# _parse_rdt_re1
+# _parse_rdt_re2
+# _parse_rdt_collision_re2
+# _parse_collision_at
 # parse_tim
 # parse_emd
 # parse_sca_header
@@ -264,8 +269,39 @@ def get_item_name(item_type: int) -> str: #vers 1
 
 # --- Parser Functions ---
 
-def parse_rdt(file_path: str) -> RDTFile: #vers 1
-    """Parse an RDT room file. Returns RDTFile with valid=True on success."""
+def _detect_rdt_version(data: bytes) -> int: #vers 1
+    """Detect RDT game version. Returns 1=RE1, 2=RE2/RE3.
+    RE1: byte[1]=num_cameras (typically 1-8), 19 offsets, cameras at 0x94
+    RE2: byte[2]=num_cameras, 21 offsets, cameras at 0xA8
+    Heuristic: check whether byte[1] or byte[2] gives a sane camera count,
+    and whether offset table at 0x20 has plausible values.
+    """
+    if len(data) < 0xA8 + 4:
+        return 1
+    # RE2 has num_sprites at byte[1], num_cameras at byte[2]
+    # RE1 has num_cameras at byte[1]
+    re1_cams = data[1]
+    re2_cams = data[2]
+    # A plausible camera count is 1-8
+    re1_ok = 1 <= re1_cams <= 8
+    re2_ok = 1 <= re2_cams <= 8
+    if re2_ok and not re1_ok:
+        return 2
+    # Both plausible - check offset[0] at 0x20+8*4=0x40 for RE2
+    # RE2 has 21 offsets so offset[4] (camera switches) is at different slot
+    # Cross-check: read 21 offsets and see if any non-zero values are file-range valid
+    offsets_21 = list(struct.unpack_from('<21I', data, 0x20))
+    valid_21 = sum(1 for o in offsets_21 if 0 < o < len(data))
+    offsets_19 = list(struct.unpack_from('<19I', data, 0x20))
+    valid_19 = sum(1 for o in offsets_19 if 0 < o < len(data))
+    # More valid offsets in 21-count suggests RE2
+    if valid_21 > valid_19 + 2:
+        return 2
+    return 1
+
+
+def parse_rdt(file_path: str) -> RDTFile: #vers 2
+    """Parse an RDT room file. Auto-detects RE1 vs RE2/RE3 format."""
     rdt = RDTFile(file_path=file_path, raw_data=b'')
     try:
         with open(file_path, 'rb') as f:
@@ -275,54 +311,14 @@ def parse_rdt(file_path: str) -> RDTFile: #vers 1
         size = len(data)
 
         if size < 0x94:
-            raise RE1FormatError(f"File too small: {size} bytes (need >= 0x94)")
+            raise RE1FormatError(f"File too small: {size} bytes")
 
-        # Parse header
-        unknown0, num_cameras, num_sound_banks = struct.unpack_from('<BBB', data, 0)
-        unknown1 = data[3:6]
+        game_ver = _detect_rdt_version(data)
 
-        header = RDTHeader(
-            unknown0=unknown0,
-            num_cameras=num_cameras,
-            num_sound_banks=num_sound_banks,
-            unknown1=unknown1,
-        )
-
-        # Parse 19 offsets at 0x20
-        if size < 0x20 + (19 * 4):
-            raise RE1FormatError("File too small for offset table")
-
-        offsets = list(struct.unpack_from('<19I', data, 0x20))
-        header.offsets = offsets
-        rdt.header = header
-
-        # Parse cameras at 0x94
-        cam_offset = 0x94
-        cam_struct_size = 44  # 11 longs
-        for i in range(num_cameras):
-            off = cam_offset + i * cam_struct_size
-            if off + cam_struct_size > size:
-                rdt.parse_errors.append(f"Camera {i}: out of bounds")
-                break
-            vals = struct.unpack_from('<11i', data, off)
-            cam = RDTCamera(
-                masks_offset=vals[0],
-                tim_masks_offset=vals[1],
-                from_x=vals[2],
-                from_y=vals[3],
-                from_z=vals[4],
-                to_x=vals[5],
-                to_y=vals[6],
-                to_z=vals[7],
-                unknown=list(vals[8:11]),
-            )
-            rdt.cameras.append(cam)
-
-        # Parse items (offset index 2)
-        _parse_rdt_items(rdt, data, size)
-
-        # Parse collision (offset index 1)
-        _parse_rdt_collision(rdt, data, size)
+        if game_ver == 2:
+            _parse_rdt_re2(rdt, data, size)
+        else:
+            _parse_rdt_re1(rdt, data, size)
 
         rdt.valid = True
 
@@ -332,6 +328,97 @@ def parse_rdt(file_path: str) -> RDTFile: #vers 1
         rdt.parse_errors.append(f"Unexpected error: {e}")
 
     return rdt
+
+
+def _parse_rdt_re1(rdt: RDTFile, data: bytes, size: int): #vers 1
+    """Parse RE1 format RDT. 19 offsets, cameras at 0x94."""
+    unknown0, num_cameras, num_sound_banks = struct.unpack_from('<BBB', data, 0)
+    header = RDTHeader(
+        unknown0=unknown0,
+        num_cameras=num_cameras,
+        num_sound_banks=num_sound_banks,
+        unknown1=data[3:6],
+    )
+    if size < 0x20 + 19 * 4:
+        raise RE1FormatError("File too small for RE1 offset table")
+    header.offsets = list(struct.unpack_from('<19I', data, 0x20))
+    rdt.header = header
+
+    cam_offset = 0x94
+    cam_struct_size = 44
+    for i in range(num_cameras):
+        off = cam_offset + i * cam_struct_size
+        if off + cam_struct_size > size:
+            rdt.parse_errors.append(f"Camera {i}: out of bounds")
+            break
+        vals = struct.unpack_from('<11i', data, off)
+        rdt.cameras.append(RDTCamera(
+            masks_offset=vals[0], tim_masks_offset=vals[1],
+            from_x=vals[2], from_y=vals[3], from_z=vals[4],
+            to_x=vals[5],   to_y=vals[6],   to_z=vals[7],
+            unknown=list(vals[8:11]),
+        ))
+
+    _parse_rdt_items(rdt, data, size)
+    _parse_rdt_collision(rdt, data, size)
+
+
+def _parse_rdt_re2(rdt: RDTFile, data: bytes, size: int): #vers 1
+    """Parse RE2/RE3 format RDT. 21 offsets, cameras at 0xA8.
+    RE2 header: byte[0]=flags, byte[1]=num_sprites, byte[2]=num_cameras,
+                byte[3]=num_sound_banks
+    """
+    num_sprites, num_cameras, num_sound_banks = data[1], data[2], data[3]
+    header = RDTHeader(
+        unknown0=data[0],
+        num_cameras=num_cameras,
+        num_sound_banks=num_sound_banks,
+        unknown1=data[4:7],
+    )
+    if size < 0x20 + 21 * 4:
+        raise RE1FormatError("File too small for RE2 offset table")
+    header.offsets = list(struct.unpack_from('<21I', data, 0x20))
+    # Pad to 21 if needed for shared code
+    while len(header.offsets) < 21:
+        header.offsets.append(0)
+    rdt.header = header
+
+    # RE2 cameras start at 0xA8 (header 8 + 21 offsets*4 = 8+84=92... 
+    # Actually: 0x20 + 21*4 = 0x74, but there's extra header data up to 0xA8)
+    cam_offset = 0xA8
+    cam_struct_size = 44
+    for i in range(num_cameras):
+        off = cam_offset + i * cam_struct_size
+        if off + cam_struct_size > size:
+            rdt.parse_errors.append(f"Camera {i}: out of bounds (RE2)")
+            break
+        vals = struct.unpack_from('<11i', data, off)
+        rdt.cameras.append(RDTCamera(
+            masks_offset=vals[0], tim_masks_offset=vals[1],
+            from_x=vals[2], from_y=vals[3], from_z=vals[4],
+            to_x=vals[5],   to_y=vals[6],   to_z=vals[7],
+            unknown=list(vals[8:11]),
+        ))
+
+    # RE2 items at offset[1] (collision index differs)
+    # RE2 item struct: x(2)y(2)z(2)rot(2)type(1)flags(1)amount(1)scenario(1) = 12 bytes
+    _parse_rdt_items(rdt, data, size)
+    # RE2 collision at offset[3] (not offset[1])
+    _parse_rdt_collision_re2(rdt, data, size)
+
+
+def _parse_rdt_collision_re2(rdt: RDTFile, data: bytes, size: int): #vers 1
+    """Parse collision from RE2 RDT where collision is at offset[3]."""
+    if not rdt.header or len(rdt.header.offsets) < 4:
+        return
+    col_offset = rdt.header.offsets[3]
+    if col_offset == 0 or col_offset >= size:
+        # Try offset[1] as fallback
+        if len(rdt.header.offsets) > 1:
+            col_offset = rdt.header.offsets[1]
+        if col_offset == 0 or col_offset >= size:
+            return
+    _parse_collision_at(rdt, data, size, col_offset)
 
 
 def _parse_rdt_items(rdt: RDTFile, data: bytes, size: int): #vers 1
@@ -370,13 +457,17 @@ def _parse_rdt_items(rdt: RDTFile, data: bytes, size: int): #vers 1
 
 
 def _parse_rdt_collision(rdt: RDTFile, data: bytes, size: int): #vers 1
-    """Parse collision boundary data from RDT offset[1]."""
+    """Parse collision boundary data from RDT offset[1] (RE1)."""
     if not rdt.header or len(rdt.header.offsets) < 2:
         return
-
     col_offset = rdt.header.offsets[1]
     if col_offset == 0 or col_offset >= size:
         return
+    _parse_collision_at(rdt, data, size, col_offset)
+
+
+def _parse_collision_at(rdt: RDTFile, data: bytes, size: int, col_offset: int): #vers 1
+    """Shared collision parser given a known offset."""
 
     # SCA header: 2+2+5*4 = 24 bytes
     if col_offset + 24 > size:
@@ -387,27 +478,18 @@ def _parse_rdt_collision(rdt: RDTFile, data: bytes, size: int): #vers 1
     rdt.sca_counts = counts
     rdt.sca_ceiling = (ceiling_x, ceiling_z)
 
-    # Boundary entries: 16 bytes each
-    # type(2) x1(2) z1(2) x2(2) z2(2) floor(1) density(1) sound(1) pad(1) ... varies
     boundary_struct_size = 16
     off = col_offset + 24
-
     total = sum(counts)
     for i in range(total):
         if off + boundary_struct_size > size:
             break
         vals = struct.unpack_from('<HhhhhBBBB', data, off)
-        boundary = RDTCollisionBoundary(
+        rdt.collision.append(RDTCollisionBoundary(
             boundary_type=vals[0],
-            x1=vals[1],
-            z1=vals[2],
-            x2=vals[3],
-            z2=vals[4],
-            floor=vals[5],
-            density=vals[6],
-            sound_attr=vals[7],
-        )
-        rdt.collision.append(boundary)
+            x1=vals[1], z1=vals[2], x2=vals[3], z2=vals[4],
+            floor=vals[5], density=vals[6], sound_attr=vals[7],
+        ))
         off += boundary_struct_size
 
 

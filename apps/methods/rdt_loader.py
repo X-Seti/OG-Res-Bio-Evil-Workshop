@@ -48,7 +48,11 @@ def load_rdt_file(main_window: 'ResBioEvilWorkshop', file_path: str) -> Optional
     main_window.current_file_path = file_path
 
     # Update window title
-    main_window.setWindowTitle(f"ResBio-Evil Workshop: {rdt.room_id}")
+    try:
+        from apps.version import title_string
+        main_window.setWindowTitle(title_string(rdt.room_id))
+    except ImportError:
+        main_window.setWindowTitle(f"ResBio-Evil Workshop: {rdt.room_id}")
 
     # Populate middle table
     populate_room_table(main_window, rdt)
