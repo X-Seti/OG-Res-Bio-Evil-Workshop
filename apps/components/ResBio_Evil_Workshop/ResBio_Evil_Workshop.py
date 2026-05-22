@@ -466,6 +466,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         self.current_rdt = None
         self.current_file_path = None
         self.icon_display_mode = "icons_and_text"
+        self._recent_files = None   # initialised in setup_ui after app_settings ready
 
         # Get app_settings from main_window if available
         if main_window and hasattr(main_window, 'app_settings'):
@@ -598,6 +599,18 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(*self.get_content_margins())
         main_layout.setSpacing(self.setspacing)
+
+        # Initialise recent files manager
+        try:
+            from apps.core.re_recent_files import RecentFilesManager
+            self._recent_files = RecentFilesManager(
+                getattr(self, 'app_settings', None))
+        except Exception as e:
+            print(f"RecentFiles init error: {e}")
+            self._recent_files = None
+
+        # Set app icon
+        self._set_app_icon()
 
         toolbar = self._create_toolbar()
         main_layout.addWidget(toolbar)
@@ -2143,7 +2156,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         ops_layout.addWidget(self.compress_btn)
 
         # Decompress
-        self.uncompress_btn = QPushButton("Unpack")
+        self.uncompress_btn = QPushButton("Decomp")
         self.uncompress_btn.setFont(self.button_font)
         self.uncompress_btn.setIcon(ResBioSVGIcons.uncompress_icon())
         self.uncompress_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
@@ -2173,35 +2186,27 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
         info_layout.addLayout(ops_layout)
 
-        # LINE 3: Item / disc operations
+        # LINE 3: File-type quick access + audio player
         item_layout = QHBoxLayout()
         item_layout.setSpacing(self.panelspacing)
 
-        self.show_shadow_btn = QPushButton("Disc")
-        self.show_shadow_btn.setFont(self.button_font)
-        self.show_shadow_btn.setIcon(ResBioSVGIcons.chip_icon())
-        self.show_shadow_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
-        self.show_shadow_btn.setToolTip("Open disc image manager")
-        self.show_shadow_btn.clicked.connect(self._open_disc_manager)
-        item_layout.addWidget(self.show_shadow_btn)
+        # RDT quick-open
+        self.rdt_quick_btn = QPushButton("RDT")
+        self.rdt_quick_btn.setFont(self.button_font)
+        self.rdt_quick_btn.setIcon(ResBioSVGIcons.folder_icon())
+        self.rdt_quick_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
+        self.rdt_quick_btn.setToolTip("Open RDT room file")
+        self.rdt_quick_btn.clicked.connect(self._open_file)
+        item_layout.addWidget(self.rdt_quick_btn)
 
-        self.create_shadow_btn = QPushButton("Add Item")
-        self.create_shadow_btn.setFont(self.button_font)
-        self.create_shadow_btn.setIcon(ResBioSVGIcons.add_icon())
-        self.create_shadow_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
-        self.create_shadow_btn.setEnabled(False)
-        self.create_shadow_btn.setToolTip("Add new item to room")
-        item_layout.addWidget(self.create_shadow_btn)
-
-        self.remove_shadow_btn = QPushButton("Del Item")
-        self.remove_shadow_btn.setFont(self.button_font)
-        self.remove_shadow_btn.setIcon(ResBioSVGIcons.delete_icon())
-        self.remove_shadow_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
-        self.remove_shadow_btn.setEnabled(False)
-        self.remove_shadow_btn.setToolTip("Remove selected item from room")
-        item_layout.addWidget(self.remove_shadow_btn)
-
-        item_layout.addStretch()
+        # EMD model quick-open
+        self.emd_quick_btn = QPushButton("EMD")
+        self.emd_quick_btn.setFont(self.button_font)
+        self.emd_quick_btn.setIcon(ResBioSVGIcons.mesh_icon())
+        self.emd_quick_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
+        self.emd_quick_btn.setToolTip("Open EMD model file")
+        self.emd_quick_btn.clicked.connect(self._open_emd_file)
+        item_layout.addWidget(self.emd_quick_btn)
 
         # TIM texture quick-open
         self.open_tim_btn = QPushButton("TIM")
@@ -2212,16 +2217,42 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         self.open_tim_btn.clicked.connect(self._open_tim_file)
         item_layout.addWidget(self.open_tim_btn)
 
-        # Unpack quick-open
-        self.unpack_btn = QPushButton("Unpack")
-        self.unpack_btn.setFont(self.button_font)
-        self.unpack_btn.setIcon(ResBioSVGIcons.package_icon())
-        self.unpack_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
-        self.unpack_btn.setToolTip("Unpack RE game files")
-        self.unpack_btn.clicked.connect(self._open_unpack_dialog)
-        item_layout.addWidget(self.unpack_btn)
+        # Audio quick-open (VAG/WAV/SND)
+        self.audio_quick_btn = QPushButton("VAG")
+        self.audio_quick_btn.setFont(self.button_font)
+        self.audio_quick_btn.setIcon(ResBioSVGIcons.volume_up_icon())
+        self.audio_quick_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
+        self.audio_quick_btn.setToolTip("Open audio file (VAG/WAV/SND)")
+        self.audio_quick_btn.clicked.connect(self._open_audio_file)
+        item_layout.addWidget(self.audio_quick_btn)
+
+        # SCD script quick-view
+        self.scripts_btn = QPushButton("SCD")
+        self.scripts_btn.setFont(self.button_font)
+        self.scripts_btn.setIcon(ResBioSVGIcons.analyze_icon())
+        self.scripts_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
+        self.scripts_btn.setEnabled(False)
+        self.scripts_btn.setToolTip("View room scripts (SCD)")
+        self.scripts_btn.clicked.connect(
+            lambda: self.display_mode_combo.setCurrentText("Scripts"))
+        item_layout.addWidget(self.scripts_btn)
 
         info_layout.addLayout(item_layout)
+
+        # Audio player strip
+        try:
+            from apps.gui.audio_player import AudioPlayerWidget
+            self.audio_player = AudioPlayerWidget(self)
+            info_layout.addWidget(self.audio_player)
+            info_group.setMaximumHeight(200)  # expand for player
+        except ImportError as e:
+            print(f"Warning: audio_player not available: {e}")
+            self.audio_player = None
+
+        # Keep shadow button aliases for any existing code
+        self.show_shadow_btn   = self.rdt_quick_btn
+        self.create_shadow_btn = self.emd_quick_btn
+        self.remove_shadow_btn = self.scripts_btn
 
         main_layout.addWidget(info_group, stretch=0)
         return panel
@@ -3849,15 +3880,22 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             img_debugger.error(f"Error in open file dialog: {str(e)}")
             QMessageBox.critical(self, "Error", f"Failed to open file:\n{str(e)}")
 
-    def _load_rdt(self, file_path: str): #vers 1
+    def _load_rdt(self, file_path: str): #vers 2
         """Load an RDT file via rdt_loader and update UI."""
         try:
             from apps.methods.rdt_loader import load_rdt_file
+            from apps.core.re_room_names import get_game_from_room_id
             rdt = load_rdt_file(self, file_path)
-            if rdt and not rdt.valid and rdt.parse_errors:
-                errors = '\n'.join(rdt.parse_errors)
-                QMessageBox.warning(self, "Parse Warnings",
-                    f"File loaded with errors:\n{errors}")
+            if rdt:
+                # Save to recent files
+                if self._recent_files:
+                    game = get_game_from_room_id(rdt.room_id)
+                    self._recent_files.add_recent_file(
+                        file_path, rdt.room_id, game)
+                if not rdt.valid and rdt.parse_errors:
+                    errors = '\n'.join(rdt.parse_errors)
+                    QMessageBox.warning(self, "Parse Warnings",
+                        f"File loaded with errors:\n{errors}")
         except Exception as e:
             img_debugger.error(f"RDT load error: {e}")
             QMessageBox.critical(self, "Load Error", f"Failed to load RDT:\n{str(e)}")
@@ -4803,24 +4841,127 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             except Exception as e:
                 QMessageBox.critical(self, "Export Error", str(e))
 
-    def _show_app_menu(self): #vers 1
-        """Pop-up application menu from the Menu button."""
-        from PyQt6.QtWidgets import QMenu
+    def _set_app_icon(self): #vers 1
+        """Set window icon from SVG."""
+        try:
+            import os
+            from PyQt6.QtGui import QIcon, QPixmap, QPainter
+            from PyQt6.QtSvg import QSvgRenderer
+            from PyQt6.QtCore import QByteArray
+
+            icon_path = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                'apps', 'icons', 'app_icon.svg'
+            )
+            if os.path.exists(icon_path):
+                renderer = QSvgRenderer(icon_path)
+                pixmap = QPixmap(64, 64)
+                pixmap.fill(__import__('PyQt6.QtCore', fromlist=['Qt']).Qt.GlobalColor.transparent)
+                painter = QPainter(pixmap)
+                renderer.render(painter)
+                painter.end()
+                self.setWindowIcon(QIcon(pixmap))
+        except Exception as e:
+            img_debugger.debug(f"App icon error: {e}")
+
+    def _show_app_menu(self): #vers 1    def _show_app_menu(self): #vers 2
+        """Pop-up application menu with recent files and game paths."""
+        from PyQt6.QtWidgets import QMenu, QInputDialog, QFileDialog
         menu = QMenu(self)
-        menu.addAction("Open RDT...",         self._open_file)
-        menu.addAction("Open Stage Folder...", self._browse_stage_folder)
-        menu.addAction("Open Disc Image...",   self._open_disc_manager)
+
+        # File operations
+        menu.addAction("Open RDT...",           self._open_file)
+        menu.addAction("Open Stage Folder...",  self._browse_stage_folder)
+        menu.addAction("Open Disc Image...",    self._open_disc_manager)
         menu.addSeparator()
-        menu.addAction("Save",     self._save_file)
-        menu.addAction("Save As",  self._save_file_as)
+
+        # Recent files submenu
+        recent_menu = menu.addMenu("Recent Files")
+        rf = self._recent_files
+        recent = rf.get_recent_files() if rf else []
+        if recent:
+            for entry in recent:
+                path     = entry['path']
+                room_id  = entry.get('room_id', '')
+                ts       = entry.get('timestamp', '')
+                label    = f"{room_id}  —  {os.path.basename(path)}  ({ts})"
+                act = recent_menu.addAction(label)
+                act.triggered.connect(lambda checked, p=path: self._load_rdt(p))
+            recent_menu.addSeparator()
+            recent_menu.addAction("Clear Recent Files",
+                lambda: (rf.clear_recent_files() if rf else None))
+        else:
+            recent_menu.addAction("(no recent files)").setEnabled(False)
+
+        # Game paths submenu
+        paths_menu = menu.addMenu("Game Paths")
+        gp = rf.get_game_paths() if rf else {}
+        if gp:
+            for label, path in gp.items():
+                act = paths_menu.addAction(f"{label}  —  {path}")
+                act.triggered.connect(lambda checked, p=path: self._load_stage_folder(p))
+            paths_menu.addSeparator()
+
+        paths_menu.addAction("Add Game Path...", self._add_game_path)
+        if gp:
+            paths_menu.addAction("Manage Game Paths...", self._manage_game_paths)
+
+        menu.addSeparator()
+        menu.addAction("Save",           self._save_file)
+        menu.addAction("Save As...",     self._save_file_as)
         menu.addAction("Export JSON...", self._export_room_json)
         menu.addSeparator()
-        menu.addAction("Settings", self._show_workshop_settings)
-        menu.addAction("About",    self._show_about_dialog)
+        menu.addAction("Settings",       self._show_workshop_settings)
+        menu.addAction("About",          self._show_about_dialog)
         menu.addSeparator()
-        menu.addAction("Quit",     self.close)
+        menu.addAction("Quit",           self.close)
+
         btn = self.menu_btn
         menu.exec(btn.mapToGlobal(btn.rect().bottomLeft()))
+
+    def _add_game_path(self): #vers 1
+        """Add a new game path via folder dialog."""
+        from PyQt6.QtWidgets import QFileDialog, QInputDialog
+        folder = QFileDialog.getExistingDirectory(self, "Select Game Folder")
+        if not folder:
+            return
+        # Suggest a label
+        rf = self._recent_files
+        suggested = rf.suggest_game_label(folder) if rf else os.path.basename(folder)
+        label, ok = QInputDialog.getText(self, "Game Path Label",
+            "Label for this game path:", text=suggested)
+        if ok and label and rf:
+            rf.add_game_path(label, folder)
+            self._load_stage_folder(folder)
+
+    def _manage_game_paths(self): #vers 1
+        """Show a simple dialog to remove game paths."""
+        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QListWidget, QHBoxLayout, QPushButton
+        rf = self._recent_files
+        if not rf:
+            return
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Manage Game Paths")
+        dlg.resize(500, 300)
+        layout = QVBoxLayout(dlg)
+        lst = QListWidget()
+        for label, path in rf.get_game_paths().items():
+            lst.addItem(f"{label}  —  {path}")
+        layout.addWidget(lst)
+        btn_row = QHBoxLayout()
+        remove_btn = QPushButton("Remove Selected")
+        close_btn  = QPushButton("Close")
+        def _remove():
+            row = lst.currentRow()
+            if row >= 0:
+                label = list(rf.get_game_paths().keys())[row]
+                rf.remove_game_path(label)
+                lst.takeItem(row)
+        remove_btn.clicked.connect(_remove)
+        close_btn.clicked.connect(dlg.accept)
+        btn_row.addWidget(remove_btn); btn_row.addWidget(close_btn)
+        layout.addLayout(btn_row)
+        dlg.exec()
 
     def _cycle_display_mode(self): #vers 1
         """Cycle the display stack to the next view mode."""
@@ -4866,6 +5007,31 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
             self._load_stage_folder(output_dir)
+
+    def _open_emd_file(self): #vers 1
+        """Open an EMD model file and show in the model viewer."""
+        try:
+            path, _ = QFileDialog.getOpenFileName(
+                self, "Open EMD Model", "",
+                "EMD Model Files (*.emd *.EMD *.pld *.PLD);;All Files (*)")
+            if path:
+                if hasattr(self, 'emd_viewer') and self.emd_viewer:
+                    self.emd_viewer.load_emd_file(path)
+                    self.display_mode_combo.setCurrentText("Model")
+        except Exception as e:
+            img_debugger.error(f"EMD open error: {e}")
+
+    def _open_audio_file(self): #vers 1
+        """Open an audio file and load into the player."""
+        try:
+            path, _ = QFileDialog.getOpenFileName(
+                self, "Open Audio File", "",
+                "Audio Files (*.vag *.VAG *.wav *.WAV *.snd *.SND);;All Files (*)")
+            if path:
+                if hasattr(self, 'audio_player') and self.audio_player:
+                    self.audio_player.load_file(path)
+        except Exception as e:
+            img_debugger.error(f"Audio open error: {e}")
 
     def _open_tim_file(self): #vers 1
         """Open a TIM texture file directly."""

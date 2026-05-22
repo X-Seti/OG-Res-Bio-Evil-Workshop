@@ -81,6 +81,18 @@ def load_rdt_file(main_window: 'ResBioEvilWorkshop', file_path: str) -> Optional
     if hasattr(main_window, 'export_btn'):
         main_window.export_btn.setEnabled(rdt.valid)
 
+    # Enable scripts button
+    if hasattr(main_window, 'scripts_btn'):
+        main_window.scripts_btn.setEnabled(rdt.valid)
+
+    # Load audio file for this room if player exists
+    if hasattr(main_window, 'audio_player') and main_window.audio_player:
+        from apps.core.re_audio import scan_audio_files
+        import os
+        audio_files = scan_audio_files(os.path.dirname(rdt.file_path))
+        if audio_files:
+            main_window.audio_player.load_file(audio_files[0])
+
     # Trigger map editor update
     if hasattr(main_window, 'room_map_editor'):
         main_window.room_map_editor.load_rdt(rdt)

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Background circle -->
+  <circle cx="32" cy="32" r="30" fill="#1a1a2e" stroke="#00d8ff" stroke-width="2"/>
+
+  <!-- Biohazard symbol (simplified) -->
+  <!-- Centre circle -->
+  <circle cx="32" cy="32" r="5" fill="none" stroke="#00d8ff" stroke-width="2.5"/>
+
+  <!-- Three arcs of the biohazard symbol -->
+  <!-- Top arc -->
+  <path d="M 32 27 A 10 10 0 0 1 40.7 37 L 44 35 A 15 15 0 0 0 32 17 Z"
+        fill="#00d8ff" opacity="0.85"/>
+  <!-- Bottom-right arc -->
+  <path d="M 40.7 37 A 10 10 0 0 1 23.3 37 L 20 39 A 15 15 0 0 0 44 35 Z"
+        fill="#00d8ff" opacity="0.85"/>
+  <!-- Bottom-left arc -->
+  <path d="M 23.3 37 A 10 10 0 0 1 32 27 L 32 22 A 15 15 0 0 0 20 39 Z"
+        fill="#00d8ff" opacity="0.85"/>
+
+  <!-- RE text below -->
+  <text x="32" y="55" font-family="monospace" font-size="9" font-weight="bold"
+        fill="#00d8ff" text-anchor="middle" letter-spacing="2">RE</text>
+</svg>
