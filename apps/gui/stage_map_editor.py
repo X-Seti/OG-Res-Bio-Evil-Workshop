@@ -1,36 +1,44 @@
 #!/usr/bin/env python3
-#this belongs in apps/gui/stage_map_editor.py - Version: 1
+#this belongs in apps/gui/stage_map_editor.py - Version: 2
 # X-Seti - May22 2026 - ResBio-Evil-Workshop - Stage Map Editor
 """
-Stage Map Editor - Visual canvas showing all rooms in a stage as boxes
-with connection arrows. Click to load a room. Drag to reposition.
-Right-click for room actions: open, swap, remove.
+Stage Map Editor - Visual map of rooms in a stage with named boxes,
+directional connection arrows, and thumbnail placeholders.
+Layout matches room topology, not a dumb grid.
+Click = load room + show cameras. Drag rooms to reposition.
 """
 
 import os
-from typing import Optional, Dict, Tuple, TYPE_CHECKING
+from typing import Optional, Dict, Tuple, List, TYPE_CHECKING
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QFrame, QMenu, QFileDialog, QMessageBox
 )
-from PyQt6.QtCore import Qt, QPoint, QRect, pyqtSignal
+from PyQt6.QtCore import Qt, QPoint, QRect, QPointF, pyqtSignal
 from PyQt6.QtGui import (
-    QPainter, QPen, QBrush, QColor, QFont,
-    QWheelEvent, QMouseEvent, QKeyEvent
+    QPainter, QPen, QBrush, QColor, QFont, QPolygon,
+    QWheelEvent, QMouseEvent, QKeyEvent, QFontMetrics
 )
 
-from apps.core.re1_room_map import StageGraph, RoomNode, scan_stage_folder, swap_rooms, remove_room
-
-if TYPE_CHECKING:
-    from apps.components.ResBio_Evil_Workshop.ResBio_Evil_Workshop import ResBioEvilWorkshop
+from apps.core.re1_room_map import (
+    StageGraph, RoomNode, scan_stage_folder, swap_rooms, remove_room
+)
 
 ##Methods list -
+# _arrow_between_rects
 # _draw_connections
 # _draw_room_box
+# _draw_status
+# _draw_grid
 # _find_room_at
 # _room_rect
+# _show_context_menu
+# _start_swap
+# _do_swap
+# _confirm_remove
 # keyPressEvent
-# load_folder
+# load_graph
+# mouseDoubleClickEvent
 # mouseMoveEvent
 # mousePressEvent
 # mouseReleaseEvent
@@ -43,27 +51,76 @@ if TYPE_CHECKING:
 ##class StageMapWidget:
 
 
-# Colors
-COL_BG          = QColor(18, 20, 24)
-COL_ROOM        = QColor(40, 55, 75)
-COL_ROOM_BORDER = QColor(80, 130, 200)
-COL_ROOM_SEL    = QColor(60, 100, 160)
-COL_ROOM_SEL_BORDER = QColor(120, 200, 255)
-COL_CONN_LINE   = QColor(100, 180, 100, 180)
-COL_CONN_ARR    = QColor(100, 220, 100, 220)
-COL_TEXT        = QColor(200, 210, 220)
-COL_TEXT_DIM    = QColor(120, 130, 140)
-COL_GRID        = QColor(35, 38, 44)
+# RE1 known room names by room ID pattern
+# Key format: last 3 chars of room_id (stage+index hex) e.g. "000", "100", "200"
+RE1_ROOM_NAMES: Dict[str, str] = {
+    # Stage 0 - Spencer Mansion
+    "000": "Intro / Outside",
+    "001": "Main Hall",
+    "002": "Dining Room",
+    "003": "West Hallway",
+    "004": "Stairs",
+    "005": "Art Gallery",
+    "006": "Drawing Room",
+    "007": "East Hallway",
+    "008": "Changing Room",
+    "009": "Library",
+    "00A": "Bathroom",
+    "00B": "Master Bedroom",
+    "00C": "Guard Room",
+    "00D": "Storage Room",
+    "00E": "Courtyard",
+    "00F": "Greenhouse",
+    # Stage 1
+    "100": "Basement",
+    "101": "Lab Entrance",
+    "102": "Corridor",
+    "103": "Research Lab",
+    "104": "Power Room",
+    "105": "Elevator",
+    # Stage 2 - RE2 Police Dept (placeholder)
+    "200": "Front Entrance",
+    "201": "Main Office",
+    "202": "Dark Room",
+    "203": "Interrogation",
+    "204": "S.T.A.R.S. Office",
+}
 
-ROOM_W = 110
-ROOM_H = 60
+# Colors
+COL_BG          = QColor(14, 16, 20)
+COL_ROOM        = QColor(28, 38, 54)
+COL_ROOM_BORDER = QColor(60, 110, 180)
+COL_ROOM_HOVER  = QColor(38, 52, 72)
+COL_ROOM_SEL    = QColor(45, 75, 130)
+COL_ROOM_SEL_BORDER = QColor(100, 180, 255)
+COL_ROOM_SWAP   = QColor(70, 50, 15)
+COL_ROOM_SWAP_BORDER = QColor(255, 190, 40)
+COL_THUMB_BG    = QColor(20, 28, 40)
+COL_CONN        = QColor(80, 160, 80, 200)
+COL_CONN_DARK   = QColor(60, 120, 60, 140)
+COL_ARROW       = QColor(100, 200, 100, 230)
+COL_TEXT        = QColor(200, 215, 230)
+COL_TEXT_ID     = QColor(100, 140, 180)
+COL_TEXT_DIM    = QColor(100, 115, 130)
+COL_GRID        = QColor(22, 25, 30)
+
+ROOM_W      = 130
+ROOM_H      = 72
+THUMB_H     = 36   # height of thumbnail area inside box
+ARROW_SIZE  = 8
+
+
+def _get_room_name(room_id: str) -> str: #vers 1
+    """Return human-readable name for a room ID, or the raw ID."""
+    key = room_id.upper().replace("ROOM", "")[-3:]
+    return RE1_ROOM_NAMES.get(key, room_id)
 
 
 class StageMapCanvas(QWidget): #vers 1
-    """QPainter canvas drawing a StageGraph as room boxes with arrows."""
+    """QPainter canvas drawing rooms as named boxes with directional arrows."""
 
-    room_clicked    = pyqtSignal(str)   # room_id
-    room_activated  = pyqtSignal(str)   # double-click: load the room
+    room_clicked   = pyqtSignal(str)   # single click: room_id
+    room_activated = pyqtSignal(str)   # double-click: load room
 
     def __init__(self, parent=None): #vers 1
         super().__init__(parent)
@@ -73,23 +130,24 @@ class StageMapCanvas(QWidget): #vers 1
         self._drag_start: Optional[QPoint] = None
         self._drag_room: Optional[str] = None
         self._selected_room: Optional[str] = None
+        self._hovered_room: Optional[str] = None
         self._panning = False
-        self._swap_pending: Optional[str] = None  # first room in swap operation
+        self._swap_pending: Optional[str] = None
 
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.setStyleSheet("background-color: #12141a;")
+        self.setStyleSheet("background-color: #0e1014;")
         self.setMinimumSize(300, 300)
 
     def load_graph(self, graph: StageGraph): #vers 1
         self.graph = graph
         self._selected_room = None
         self._swap_pending = None
+        self._hovered_room = None
         self.reset_view()
         self.update()
 
     def reset_view(self): #vers 1
-        """Fit all rooms into view."""
         if not self.graph or not self.graph.rooms:
             self._zoom = 1.0
             self._pan = QPoint(40, 40)
@@ -97,30 +155,31 @@ class StageMapCanvas(QWidget): #vers 1
             return
 
         positions = [n.position for n in self.graph.rooms.values()]
-        min_x = min(p[0] for p in positions)
-        min_y = min(p[1] for p in positions)
-        max_x = max(p[0] for p in positions) + ROOM_W
-        max_y = max(p[1] for p in positions) + ROOM_H
+        min_x = min(p[0] for p in positions) - 20
+        min_y = min(p[1] for p in positions) - 20
+        max_x = max(p[0] for p in positions) + ROOM_W + 20
+        max_y = max(p[1] for p in positions) + ROOM_H + 20
 
-        w = max_x - min_x + 80
-        h = max_y - min_y + 80
-        zoom_x = self.width()  / max(w, 1)
-        zoom_y = self.height() / max(h, 1)
+        w = max(max_x - min_x, 1)
+        h = max(max_y - min_y, 1)
+        zoom_x = self.width()  * 0.9 / w
+        zoom_y = self.height() * 0.9 / h
         self._zoom = max(0.1, min(zoom_x, zoom_y, 2.0))
 
         cx = (min_x + max_x) / 2
         cy = (min_y + max_y) / 2
-        sx = int(cx * self._zoom)
-        sy = int(cy * self._zoom)
-        self._pan = QPoint(self.width() // 2 - sx, self.height() // 2 - sy)
+        self._pan = QPoint(
+            int(self.width()  / 2 - cx * self._zoom),
+            int(self.height() / 2 - cy * self._zoom)
+        )
         self.update()
 
-    # --- Coordinate helpers ---
+    # --- Coordinates ---
 
-    def _to_screen(self, wx: int, wy: int) -> Tuple[int, int]: #vers 1
+    def _to_screen(self, wx, wy) -> Tuple[int, int]: #vers 1
         return int(wx * self._zoom) + self._pan.x(), int(wy * self._zoom) + self._pan.y()
 
-    def _to_world(self, sx: int, sy: int) -> Tuple[int, int]: #vers 1
+    def _to_world(self, sx, sy) -> Tuple[int, int]: #vers 1
         return int((sx - self._pan.x()) / self._zoom), int((sy - self._pan.y()) / self._zoom)
 
     def _room_rect(self, node: RoomNode) -> QRect: #vers 1
@@ -145,114 +204,207 @@ class StageMapCanvas(QWidget): #vers 1
         self._draw_grid(painter)
 
         if not self.graph:
-            painter.setPen(QColor(80, 80, 80))
+            painter.setPen(QColor(70, 75, 85))
             painter.setFont(QFont("Courier New", 11))
             painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter,
-                             "No stage loaded\nOpen a folder containing .rdt files")
+                             "No stage loaded\n\nOpen a stage folder containing .rdt files\nor use File > Open Stage Folder")
             return
 
         self._draw_connections(painter)
         for room_id, node in self.graph.rooms.items():
             self._draw_room_box(painter, room_id, node)
-
         self._draw_status(painter)
 
     def _draw_grid(self, painter: QPainter): #vers 1
-        painter.setPen(QPen(COL_GRID, 1))
-        step = int(80 * self._zoom)
-        if step < 8:
+        step = int(60 * self._zoom)
+        if step < 6:
             return
-        for x in range(0, self.width(), step):
+        painter.setPen(QPen(COL_GRID, 1))
+        for x in range(self._pan.x() % step, self.width(), step):
             painter.drawLine(x, 0, x, self.height())
-        for y in range(0, self.height(), step):
+        for y in range(self._pan.y() % step, self.height(), step):
             painter.drawLine(0, y, self.width(), y)
 
     def _draw_connections(self, painter: QPainter): #vers 1
         if not self.graph:
             return
-        seen = set()
+
+        drawn_bidirectional = set()
+
         for conn in self.graph.connections:
-            key = tuple(sorted([conn.from_room, conn.to_room]))
             node_a = self.graph.rooms.get(conn.from_room)
             node_b = self.graph.rooms.get(conn.to_room)
             if not node_a or not node_b:
                 continue
+
+            key = tuple(sorted([conn.from_room, conn.to_room]))
+            bidirectional = any(
+                c.from_room == conn.to_room and c.to_room == conn.from_room
+                for c in self.graph.connections
+            )
+
             ra = self._room_rect(node_a)
             rb = self._room_rect(node_b)
-            ax, ay = ra.center().x(), ra.center().y()
-            bx, by = rb.center().x(), rb.center().y()
 
-            painter.setPen(QPen(COL_CONN_LINE, 1.5))
+            # Find best edge-to-edge connection points
+            ax, ay, bx, by = self._arrow_between_rects(ra, rb)
+
+            is_selected = (conn.from_room == self._selected_room or
+                           conn.to_room == self._selected_room)
+            line_color = COL_CONN if is_selected else COL_CONN_DARK
+            painter.setPen(QPen(line_color, 1.5 if is_selected else 1.0))
             painter.drawLine(ax, ay, bx, by)
 
-            # Arrow head on midpoint if not yet drawn
-            if key not in seen:
-                mx, my = (ax + bx) // 2, (ay + by) // 2
-                painter.setBrush(QBrush(COL_CONN_ARR))
-                painter.setPen(Qt.PenStyle.NoPen)
-                painter.drawEllipse(QPoint(mx, my), 4, 4)
-                seen.add(key)
+            # Draw directional arrowhead at destination end
+            self._draw_arrowhead(painter, ax, ay, bx, by, COL_ARROW if is_selected else COL_CONN)
+
+            # If bidirectional and not yet drawn the reverse arrow
+            if bidirectional and key not in drawn_bidirectional:
+                self._draw_arrowhead(painter, bx, by, ax, ay, COL_CONN_DARK)
+                drawn_bidirectional.add(key)
+
+    def _arrow_between_rects(self, ra: QRect, rb: QRect): #vers 1
+        """Return (ax, ay, bx, by) connecting nearest edges of two rects."""
+        ax, ay = ra.center().x(), ra.center().y()
+        bx, by = rb.center().x(), rb.center().y()
+
+        dx = bx - ax
+        dy = by - ay
+
+        # Clamp exit point to edge of ra
+        if abs(dx) > abs(dy):
+            ax = ra.right() if dx > 0 else ra.left()
+            ay = ra.center().y()
+        else:
+            ax = ra.center().x()
+            ay = ra.bottom() if dy > 0 else ra.top()
+
+        # Clamp entry point to edge of rb
+        if abs(dx) > abs(dy):
+            bx = rb.left() if dx > 0 else rb.right()
+            by = rb.center().y()
+        else:
+            bx = rb.center().x()
+            by = rb.top() if dy > 0 else rb.bottom()
+
+        return ax, ay, bx, by
+
+    def _draw_arrowhead(self, painter: QPainter, ax, ay, bx, by, color: QColor): #vers 1
+        """Draw filled triangle arrowhead at (bx, by) pointing from (ax,ay)."""
+        import math
+        dx, dy = bx - ax, by - ay
+        length = math.sqrt(dx*dx + dy*dy)
+        if length < 1:
+            return
+        ux, uy = dx / length, dy / length
+        px, py = -uy, ux  # perpendicular
+
+        sz = max(5, int(ARROW_SIZE * self._zoom))
+        p1 = QPoint(int(bx), int(by))
+        p2 = QPoint(int(bx - ux * sz + px * sz * 0.4),
+                    int(by - uy * sz + py * sz * 0.4))
+        p3 = QPoint(int(bx - ux * sz - px * sz * 0.4),
+                    int(by - uy * sz - py * sz * 0.4))
+
+        painter.setBrush(QBrush(color))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawPolygon(QPolygon([p1, p2, p3]))
 
     def _draw_room_box(self, painter: QPainter, room_id: str, node: RoomNode): #vers 1
         rect = self._room_rect(node)
-        selected = (room_id == self._selected_room)
-        swap_first = (room_id == self._swap_pending)
+        selected  = (room_id == self._selected_room)
+        hovered   = (room_id == self._hovered_room)
+        swap_mode = (room_id == self._swap_pending)
 
-        if swap_first:
-            fill = QColor(80, 60, 20)
-            border = QColor(255, 200, 50)
+        # Choose colors
+        if swap_mode:
+            fill, border, bw = COL_ROOM_SWAP, COL_ROOM_SWAP_BORDER, 2
         elif selected:
-            fill = COL_ROOM_SEL
-            border = COL_ROOM_SEL_BORDER
+            fill, border, bw = COL_ROOM_SEL, COL_ROOM_SEL_BORDER, 2
+        elif hovered:
+            fill, border, bw = COL_ROOM_HOVER, COL_ROOM_BORDER, 1
         else:
-            fill = COL_ROOM
-            border = COL_ROOM_BORDER
+            fill, border, bw = COL_ROOM, COL_ROOM_BORDER, 1
 
+        # Main box
         painter.setBrush(QBrush(fill))
-        painter.setPen(QPen(border, 2 if selected or swap_first else 1))
-        painter.drawRoundedRect(rect, 4, 4)
+        painter.setPen(QPen(border, bw))
+        painter.drawRoundedRect(rect, 5, 5)
 
-        # Room ID label
-        font = QFont("Courier New", max(7, int(9 * self._zoom)))
-        painter.setFont(font)
+        th = int(THUMB_H * self._zoom)
+
+        # Thumbnail strip at top
+        thumb_rect = QRect(rect.left() + 1, rect.top() + 1, rect.width() - 2, th)
+        painter.setBrush(QBrush(COL_THUMB_BG))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRect(thumb_rect)
+
+        # Thumbnail placeholder text
+        if self._zoom >= 0.5:
+            painter.setPen(QPen(QColor(50, 65, 85)))
+            painter.setFont(QFont("Courier New", max(6, int(7 * self._zoom))))
+            painter.drawText(thumb_rect, Qt.AlignmentFlag.AlignCenter, "[cam]")
+
+        # Divider line between thumb and text area
+        painter.setPen(QPen(border.darker(150), 1))
+        painter.drawLine(rect.left(), rect.top() + th + 1,
+                         rect.right(), rect.top() + th + 1)
+
+        # Text area
+        text_rect = rect.adjusted(4, th + 4, -4, -3)
+
+        # Human-readable name (larger, top of text area)
+        name = _get_room_name(room_id)
+        name_font_size = max(6, int(8 * self._zoom))
+        painter.setFont(QFont("Courier New", name_font_size, QFont.Weight.Bold))
         painter.setPen(QPen(COL_TEXT))
-        painter.drawText(rect.adjusted(3, 3, -3, -3),
-                         Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter,
-                         node.room_id)
+        # Clip name to fit
+        fm = QFontMetrics(painter.font())
+        clipped_name = fm.elidedText(name, Qt.TextElideMode.ElideRight, text_rect.width())
+        name_rect = QRect(text_rect.left(), text_rect.top(),
+                          text_rect.width(), text_rect.height() // 2 + 2)
+        painter.drawText(name_rect,
+                         Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft,
+                         clipped_name)
 
-        # Connection count
-        painter.setFont(QFont("Courier New", max(6, int(7 * self._zoom))))
-        painter.setPen(QPen(COL_TEXT_DIM))
-        doors = len(node.connections)
-        items = len(node.rdt.items) if node.rdt else 0
-        painter.drawText(rect.adjusted(3, -3, -3, -3),
-                         Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignHCenter,
-                         f"doors:{doors}  items:{items}")
+        # Room ID + stats (smaller, bottom of text area)
+        if self._zoom >= 0.5:
+            painter.setFont(QFont("Courier New", max(5, int(6 * self._zoom))))
+            painter.setPen(QPen(COL_TEXT_ID))
+            doors = len(node.connections)
+            items = len(node.rdt.items) if node.rdt else 0
+            cams  = len(node.rdt.cameras) if node.rdt else 0
+            stats = f"{room_id}  d:{doors} i:{items} c:{cams}"
+            stats_rect = QRect(text_rect.left(), text_rect.top() + text_rect.height() // 2,
+                               text_rect.width(), text_rect.height() // 2)
+            painter.drawText(stats_rect,
+                             Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft,
+                             stats)
 
     def _draw_status(self, painter: QPainter): #vers 1
         if not self.graph:
             return
-        painter.setPen(QColor(140, 140, 140))
+        painter.setPen(QColor(90, 100, 115))
         painter.setFont(QFont("Courier New", 8))
         info = (f"Rooms: {self.graph.room_count}  "
                 f"Connections: {self.graph.connection_count}  "
-                f"Zoom: {self._zoom*100:.0f}%")
+                f"Zoom: {self._zoom*100:.0f}%  "
+                f"[double-click to load  |  drag to reposition  |  right-click for options]")
         painter.drawText(6, self.height() - 6, info)
 
         if self._swap_pending:
-            painter.setPen(QColor(255, 200, 50))
-            painter.setFont(QFont("Courier New", 9))
-            painter.drawText(6, 18,
-                f"SWAP MODE: click second room to swap with {self._swap_pending}  [Esc to cancel]")
+            painter.setPen(QColor(255, 190, 40))
+            painter.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
+            name = _get_room_name(self._swap_pending)
+            painter.drawText(6, 20,
+                f"SWAP MODE: click room to swap with [{name}]  [Esc = cancel]")
 
-    # --- Mouse events ---
+    # --- Mouse ---
 
     def mousePressEvent(self, event: QMouseEvent): #vers 1
         pos = event.pos()
-
         if event.button() == Qt.MouseButton.RightButton:
-            room_id = self._find_room_at(pos)
-            self._show_context_menu(pos, room_id)
+            self._show_context_menu(pos, self._find_room_at(pos))
             return
 
         if event.button() == Qt.MouseButton.LeftButton:
@@ -271,8 +423,8 @@ class StageMapCanvas(QWidget): #vers 1
             else:
                 self._panning = True
                 self._drag_start = pos
-                self._swap_pending = None
                 self._selected_room = None
+                self._swap_pending = None
                 self.update()
 
         elif event.button() == Qt.MouseButton.MiddleButton:
@@ -281,6 +433,11 @@ class StageMapCanvas(QWidget): #vers 1
 
     def mouseMoveEvent(self, event: QMouseEvent): #vers 1
         pos = event.pos()
+        # Update hover
+        hovered = self._find_room_at(pos)
+        if hovered != self._hovered_room:
+            self._hovered_room = hovered
+            self.update()
 
         if self._panning and self._drag_start:
             self._pan += pos - self._drag_start
@@ -306,7 +463,9 @@ class StageMapCanvas(QWidget): #vers 1
     def mouseDoubleClickEvent(self, event: QMouseEvent): #vers 1
         room_id = self._find_room_at(event.pos())
         if room_id:
+            self._selected_room = room_id
             self.room_activated.emit(room_id)
+            self.update()
 
     def wheelEvent(self, event: QWheelEvent): #vers 1
         pos = event.position().toPoint()
@@ -331,15 +490,18 @@ class StageMapCanvas(QWidget): #vers 1
     def _show_context_menu(self, pos: QPoint, room_id: Optional[str]): #vers 1
         menu = QMenu(self)
         if room_id:
-            menu.addAction(f"Load room:  {room_id}",
-                           lambda: self.room_activated.emit(room_id))
+            name = _get_room_name(room_id)
+            menu.addAction(f"Load:  {name}",
+                           lambda: (setattr(self, '_selected_room', room_id),
+                                    self.room_activated.emit(room_id),
+                                    self.update()))
             menu.addSeparator()
             menu.addAction("Swap with another room...",
                            lambda: self._start_swap(room_id))
-            menu.addAction("Remove room from stage",
+            menu.addAction("Remove from stage",
                            lambda: self._confirm_remove(room_id))
         else:
-            menu.addAction("Fit all rooms [F]", self.reset_view)
+            menu.addAction("Fit all rooms  [F]", self.reset_view)
         menu.exec(self.mapToGlobal(pos))
 
     def _start_swap(self, room_id: str): #vers 1
@@ -356,21 +518,19 @@ class StageMapCanvas(QWidget): #vers 1
             QMessageBox.warning(self, "Swap Error", str(e))
 
     def _confirm_remove(self, room_id: str): #vers 1
+        name = _get_room_name(room_id)
         reply = QMessageBox.question(self, "Remove Room",
-            f"Remove {room_id} from the stage graph?\n"
-            "This only removes connections in the editor.\n"
-            "The .rdt file is not deleted.",
+            f"Remove [{name}] from the stage graph?\n"
+            "The .rdt file is NOT deleted — only the map entry is removed.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        if reply == QMessageBox.StandardButton.Yes:
-            if not self.graph:
-                return
+        if reply == QMessageBox.StandardButton.Yes and self.graph:
             remove_room(self.graph, room_id)
             if self._selected_room == room_id:
                 self._selected_room = None
             self.update()
 
 
-class StageMapToolbar(QFrame): #vers 1
+class StageMapToolbar(QFrame): #vers 2
     """Toolbar for the stage map editor."""
 
     folder_opened = pyqtSignal(str)
@@ -414,13 +574,14 @@ class StageMapToolbar(QFrame): #vers 1
         )
 
     def _on_room_clicked(self, room_id: str): #vers 1
-        self._info_label.setText(f"Selected: {room_id}")
+        name = _get_room_name(room_id)
+        self._info_label.setText(f"  {room_id}  {name}")
 
 
-class StageMapWidget(QWidget): #vers 1
-    """Combined stage map canvas + toolbar for embedding in display stack."""
+class StageMapWidget(QWidget): #vers 2
+    """Combined stage map canvas + toolbar. room_activated -> load RDT."""
 
-    room_activated = pyqtSignal(str)  # emits file_path of selected room
+    room_activated = pyqtSignal(str)   # emits file_path
 
     def __init__(self, parent=None): #vers 1
         super().__init__(parent)
@@ -441,12 +602,11 @@ class StageMapWidget(QWidget): #vers 1
         self._load_folder(folder_path)
 
     def _load_folder(self, folder_path: str): #vers 1
-        from apps.core.re1_room_map import scan_stage_folder
         graph = scan_stage_folder(folder_path, load_rdts=True)
         self.canvas.load_graph(graph)
         self.toolbar.set_graph_info(graph)
         if graph.parse_errors:
-            print(f"Stage map errors: {graph.parse_errors}")
+            print(f"Stage map load errors:\n" + "\n".join(graph.parse_errors))
 
     def _on_room_activated(self, room_id: str): #vers 1
         if not self.canvas.graph:

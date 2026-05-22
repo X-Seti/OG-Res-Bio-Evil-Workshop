@@ -1924,6 +1924,30 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         """Highlight file in list without loading."""
         pass
 
+    def _on_stage_room_activated(self, file_path: str): #vers 1
+        """Double-click in stage map: load RDT and switch to Room Map view."""
+        self._load_rdt(file_path)
+        # Switch to Room Map display
+        if hasattr(self, 'display_mode_combo'):
+            self.display_mode_combo.setCurrentText("Room Map")
+
+    def _on_stage_room_clicked(self, room_id: str): #vers 1
+        """Single-click in stage map: load RDT and switch to Cameras tab."""
+        if not hasattr(self, 'stage_map_editor') or not self.stage_map_editor:
+            return
+        graph = self.stage_map_editor.canvas.graph
+        if not graph:
+            return
+        node = graph.rooms.get(room_id)
+        if not node or not node.file_path:
+            return
+        # Load the room if not already loaded
+        if not self.current_rdt or self.current_rdt.room_id != room_id:
+            self._load_rdt(node.file_path)
+        # Switch middle panel to Cameras tab
+        if hasattr(self, 'middle_tabs'):
+            self.middle_tabs.setCurrentIndex(2)  # Cameras tab
+
     def _on_left_file_activated(self, item): #vers 1
         """Double-click: load the RDT file."""
         file_path = item.data(Qt.ItemDataRole.UserRole)
@@ -2089,7 +2113,8 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         try:
             from apps.gui.stage_map_editor import StageMapWidget
             self.stage_map_editor = StageMapWidget(self)
-            self.stage_map_editor.room_activated.connect(self._load_rdt)
+            self.stage_map_editor.room_activated.connect(self._on_stage_room_activated)
+            self.stage_map_editor.canvas.room_clicked.connect(self._on_stage_room_clicked)
             self.display_stack.addWidget(self.stage_map_editor)
         except ImportError as e:
             print(f"Warning: stage_map_editor not available: {e}")

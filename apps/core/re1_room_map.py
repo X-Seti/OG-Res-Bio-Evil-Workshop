@@ -300,9 +300,55 @@ def _patch_switch_dest(node: RoomNode, new_stage: int, new_index: int): #vers 1
     node.rdt.raw_data = bytes(data)
 
 
-def _assign_layout_positions(graph: StageGraph): #vers 1
-    """Assign simple grid positions to rooms for display."""
-    rooms = sorted(graph.rooms.values(), key=lambda n: (n.stage, n.index))
-    cols = max(4, int(len(rooms) ** 0.5) + 1)
-    for i, node in enumerate(rooms):
-        node.position = ((i % cols) * 160, (i // cols) * 120)
+def _assign_layout_positions(graph: StageGraph): #vers 2
+    """Assign topology-aware positions using BFS from the lowest-index room.
+    Rooms are spread out by connection depth so the map resembles the
+    actual layout rather than a dump grid.
+    """
+    if not graph.rooms:
+        return
+
+    rooms = list(graph.rooms.values())
+
+    # Build adjacency: room_id -> set of connected room_ids
+    adj: Dict[str, set] = {r: set() for r in graph.rooms}
+    for conn in graph.connections:
+        if conn.from_room in adj and conn.to_room in adj:
+            adj[conn.from_room].add(conn.to_room)
+            adj[conn.to_room].add(conn.from_room)
+
+    # BFS to assign levels (depth from start room)
+    start = sorted(graph.rooms.keys())[0]
+    visited = {}
+    queue = [(start, 0, 0)]  # (room_id, depth, branch)
+    depth_slots: Dict[int, List[str]] = {}
+
+    while queue:
+        room_id, depth, branch = queue.pop(0)
+        if room_id in visited:
+            continue
+        visited[room_id] = depth
+        if depth not in depth_slots:
+            depth_slots[depth] = []
+        depth_slots[depth].append(room_id)
+        neighbors = sorted(adj.get(room_id, set()) - set(visited.keys()))
+        for i, nb in enumerate(neighbors):
+            queue.append((nb, depth + 1, i))
+
+    # Handle disconnected rooms
+    for room_id in graph.rooms:
+        if room_id not in visited:
+            max_depth = max(depth_slots.keys()) + 1 if depth_slots else 0
+            visited[room_id] = max_depth
+            if max_depth not in depth_slots:
+                depth_slots[max_depth] = []
+            depth_slots[max_depth].append(room_id)
+
+    # Assign positions: depth = column, slot within depth = row
+    COL_STEP = 180
+    ROW_STEP = 110
+
+    for depth, room_ids in depth_slots.items():
+        for slot, room_id in enumerate(room_ids):
+            node = graph.rooms[room_id]
+            node.position = (depth * COL_STEP, slot * ROW_STEP)
