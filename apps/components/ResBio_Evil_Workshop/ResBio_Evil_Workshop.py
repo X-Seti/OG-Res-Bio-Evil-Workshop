@@ -738,16 +738,16 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         if APPSETTINGS_AVAILABLE and self.app_settings:
             if hasattr(self.app_settings, 'current_settings'):
                 current_theme_name = self.app_settings.current_settings.get("theme", "")
-                debug(f"Current active theme: {current_theme_name}", "THEME")
+                img_debugger.debug(f"Current active theme: {current_theme_name}", "THEME")
 
                 # Try to load that theme's colors
                 if hasattr(self.app_settings, 'themes') and current_theme_name:
                     theme_obj = self.app_settings.themes.get(current_theme_name, {})
-                    debug(f"Theme object keys: {list(theme_obj.keys())}", "THEME")
+                    img_debugger.debug(f"Theme object keys: {list(theme_obj.keys())}", "THEME")
 
         # Determine if this theme is dark or light
         is_dark = self._is_dark_theme()
-        debug(f"Theme is dark: {is_dark}", "THEME")
+        img_debugger.debug(f"Theme is dark: {is_dark}", "THEME")
 
         # Only set defaults for MISSING keys (setdefault won't override existing)
         if is_dark:
