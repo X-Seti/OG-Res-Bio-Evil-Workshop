@@ -97,7 +97,10 @@ if STANDALONE_MODE:
         #    show_col_file_dialog
         #)
         from depends.svg_icon_factory import SVGIconFactory
-        from depends.img_debug_functions import img_debugger
+        try:
+            from apps.debug.debug_functions import img_debugger
+        except ImportError:
+            from depends.img_debug_functions import img_debugger
     except ImportError as e:
         print(f"Warning: Missing standalone dependencies: {e}")
         # Minimal fallbacks
@@ -141,7 +144,10 @@ else:
             get_export_icon, get_import_icon, get_settings_icon,
             get_view_icon, get_edit_icon
         )
-        from depends.img_debug_functions import img_debugger
+        try:
+            from apps.debug.debug_functions import img_debugger
+        except ImportError:
+            from depends.img_debug_functions import img_debugger
     except ImportError as e:
         print(f"Warning: Missing docked mode imports: {e}")
         # This shouldn't happen in docked mode, but provide fallback

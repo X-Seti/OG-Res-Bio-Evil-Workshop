@@ -90,23 +90,23 @@ class IMGDebugger:
         elif level == "WARNING":
             self.warning_count += 1
     
-    def debug(self, message: str):
+    def debug(self, message: str, *args):
         """Log debug message"""
         self.log("DEBUG", message)
     
-    def info(self, message: str):
+    def info(self, message: str, *args):
         """Log info message"""
         self.log("INFO", message)
     
-    def warning(self, message: str):
+    def warning(self, message: str, *args):
         """Log warning message"""
         self.log("WARNING", message)
     
-    def error(self, message: str):
+    def error(self, message: str, *args):
         """Log error message"""
         self.log("ERROR", message)
     
-    def success(self, message: str):
+    def success(self, message: str, *args):
         """Log success message"""
         self.log("SUCCESS", message)
     
