@@ -1670,6 +1670,16 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         self.open_tim_btn.clicked.connect(self._open_tim_file)
         layout.addWidget(self.open_tim_btn)
 
+        # Disc Manager button
+        self.disc_btn = QPushButton()
+        self.disc_btn.setFont(self.button_font)
+        self.disc_btn.setIcon(ResBioSVGIcons.chip_icon())
+        self.disc_btn.setText("Disc")
+        self.disc_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
+        self.disc_btn.setToolTip("Open disc image (ISO/BIN/CUE/CCD/IMG/7z/RAR/ZIP)")
+        self.disc_btn.clicked.connect(self._open_disc_manager)
+        layout.addWidget(self.disc_btn)
+
         # Unpack button
         self.unpack_btn = QPushButton()
         self.unpack_btn.setFont(self.button_font)
@@ -4852,6 +4862,19 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             populate_items_table(self, self.current_rdt)
             if hasattr(self, 'save_btn'):
                 self.save_btn.setEnabled(True)
+
+    def _open_disc_manager(self): #vers 1
+        """Open the disc image manager dialog."""
+        try:
+            from apps.gui.disc_manager import DiscManagerDialog
+            if not hasattr(self, '_disc_manager') or self._disc_manager is None:
+                self._disc_manager = DiscManagerDialog(self)
+                self._disc_manager.stage_folder_ready.connect(self._load_stage_folder)
+            self._disc_manager.show()
+            self._disc_manager.raise_()
+        except Exception as e:
+            img_debugger.error(f"Disc manager error: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to open disc manager:\n{str(e)}")
 
     def _open_unpack_dialog(self): #vers 1
         """Open the RE file unpacker dialog."""
