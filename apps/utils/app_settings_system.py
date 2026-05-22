@@ -147,6 +147,7 @@ def _apply_settings(self): #vers 3
 
         # Form Group
         form_group = QGroupBox("Theme Information")
+        form_group.setAutoFillBackground(True)
         form_layout = QVBoxLayout(form_group)
 
         grid_layout = QGridLayout()
@@ -209,6 +210,7 @@ def _apply_settings(self): #vers 3
 
         # Color Summary
         color_group = QGroupBox("Color Summary")
+        color_group.setAutoFillBackground(True)
         color_layout = QVBoxLayout(color_group)
 
         self.color_summary = QLabel()
@@ -1840,6 +1842,29 @@ class AppSettings:
         accent_secondary = colors.get('accent_secondary', '#0A7Ad4')
         border = colors.get('border', '#cccccc')
 
+        # Handle style — 4 types: line, gradient, dots, invisible
+        cs = getattr(self, 'current_settings', {})
+        _hstyle = colors.get('handle_style', cs.get('handle_style', 'line'))
+        _hcol   = colors.get('handle_color',
+                    colors.get('splitter_color_background',
+                        cs.get('handle_color', border)))
+        _hsize  = colors.get('handle_size',   cs.get('handle_size',   '4'))
+        _hide_docked = cs.get('handle_hide_docked', False)
+        if _hide_docked:
+            _hstyle = 'invisible'
+        if _hstyle == 'gradient':
+            handle_h_css = f"background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 transparent,stop:0.5 {_hcol},stop:1 transparent); width:{_hsize}px;"
+            handle_v_css = f"background: qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 transparent,stop:0.5 {_hcol},stop:1 transparent); height:{_hsize}px;"
+        elif _hstyle == 'dots':
+            handle_h_css = f"background:{_hcol}; width:{_hsize}px; border-left:2px dotted {accent_primary}; border-right:2px dotted {accent_primary};"
+            handle_v_css = f"background:{_hcol}; height:{_hsize}px; border-top:2px dotted {accent_primary}; border-bottom:2px dotted {accent_primary};"
+        elif _hstyle == 'invisible':
+            handle_h_css = f"background:transparent; width:{_hsize}px;"
+            handle_v_css = f"background:transparent; height:{_hsize}px;"
+        else:  # line (default)
+            handle_h_css = f"background-color:{_hcol}; width:{_hsize}px;"
+            handle_v_css = f"background-color:{_hcol}; height:{_hsize}px;"
+
         # Table/List alternating rows - use table_row_odd or alternate_row as fallback
         alternate_row = colors.get('table_row_odd', colors.get('alternate_row', '#f5f5f5'))
         table_row_even = colors.get('table_row_even', bg_primary)
@@ -1848,25 +1873,42 @@ class AppSettings:
         button_normal = colors.get('button_normal', '#e0e0e0')
         button_hover = colors.get('button_hover', '#d0d0d0')
         button_pressed = colors.get('button_pressed', '#b0b0b0')
-        selection_bg = colors.get('selection_background', '#0078d4')
+        button_text   = colors.get('button_text_color',   text_primary)
+        button_text_h = colors.get('button_text_hover',   text_primary)
+        button_text_p = colors.get('button_text_pressed', text_primary)
+        selection_bg   = colors.get('selection_background', '#0078d4')
         selection_text = colors.get('selection_text', '#ffffff')
+        menu_hl_bg     = colors.get('menu_highlight_bg',   selection_bg)
+        menu_hl_text   = colors.get('menu_highlight_text', selection_text)
         grid = colors.get('grid', '#e0e0e0')
 
         # System ui - overrides
-        window_bg = colors.get('window_bg', bg_primary)
-        window_text = colors.get('window_text', text_primary)
-        base = colors.get('base', bg_primary)
-        alternate_base = colors.get('alternate_base', bg_secondary)
-        tooltip_bg = colors.get('tooltip_bg', bg_secondary)
-        tooltip_text = colors.get('tooltip_text', text_primary)
-        placeholder_text = colors.get('placeholder_text', '#aaaaaa')
-        disabled_text = colors.get('disabled_text', '#777777')
+        # Derive sensible defaults from bg_primary so light themes stay light
+        from PyQt6.QtGui import QColor as _QC
+        _is_light = _QC(bg_primary).lightness() > 128
+        window_bg = colors.get('window_bg') or bg_primary
+        # If saved window_bg is dark but theme is light, override with bg_primary
+        if _is_light and _QC(window_bg).lightness() < 64:
+            window_bg = bg_primary
+        window_text = colors.get('window_text') or text_primary
+        base = colors.get('base') or bg_primary
+        if _is_light and _QC(base).lightness() < 64:
+            base = bg_primary
+        alternate_base = colors.get('alternate_base') or bg_secondary
+        if _is_light and _QC(alternate_base).lightness() < 64:
+            alternate_base = bg_secondary
+        tooltip_bg = colors.get('tooltip_bg') or bg_secondary
+        tooltip_text = colors.get('tooltip_text') or text_primary
+        placeholder_text = colors.get('placeholder_text', '#888888' if _is_light else '#aaaaaa')
+        disabled_text = colors.get('disabled_text', '#999999' if _is_light else '#777777')
 
         # Additional colors
         success = colors.get('success', '#4caf50')
         warning = colors.get('warning', '#ff9800')
         error = colors.get('error', '#f44336')
         toolbar_bg = colors.get('toolbar_bg', bg_secondary)
+        gadgetbar_bg   = colors.get('gadgetbar_bg',   toolbar_bg)
+        gadgetbar_text = colors.get('gadgetbar_text',  text_primary)
         panel_entries = colors.get('panel_entries', bg_tertiary)
         panel_filter = colors.get('panel_filter', bg_tertiary)
 
@@ -1945,6 +1987,7 @@ class AppSettings:
 
         QPushButton {{
             background-color: {button_normal};
+            color: {button_text};
             border: 1px solid {border};
             border-radius: 4px;
             padding: 6px 12px;
@@ -2159,10 +2202,33 @@ class AppSettings:
             padding: 4px;
         }}
 
+        QMenu {{
+            background-color: {bg_secondary};
+            color: {text_primary};
+            border: 1px solid {border};
+        }}
+        QMenu::item {{
+            padding: 4px 20px 4px 20px;
+        }}
+        QMenu::item:selected {{
+            background-color: {menu_hl_bg};
+            color: {menu_hl_text};
+        }}
+        QMenu::separator {{
+            height: 1px;
+            background: {border};
+            margin: 2px 4px;
+        }}
+
         QToolBar {{
             background-color: {toolbar_bg};
             border: 1px solid {border};
             spacing: 3px;
+        }}
+        QFrame#titlebar {{
+            background-color: {gadgetbar_bg};
+            color: {gadgetbar_text};
+            border: none;
         }}
 
         QStatusBar {{
@@ -2221,15 +2287,13 @@ class AppSettings:
         }}
 
         QSplitter::handle:horizontal {{
-            background-color: {border};
-            width: 4px;
+            {handle_h_css}
         }}
         QSplitter::handle:horizontal:hover {{
             background-color: {accent_primary};
         }}
         QSplitter::handle:vertical {{
-            background-color: {border};
-            height: 4px;
+            {handle_v_css}
         }}
         QSplitter::handle:vertical:hover {{
             background-color: {accent_primary};
@@ -2890,6 +2954,14 @@ class AppSettings:
                 'button_pressed': '#b1b1b1',
                 'selection_background': '#0188c4',
                 'selection_text': '#ffffff',
+                'menu_highlight_bg': '#0188c4',
+                'menu_highlight_text': '#ffffff',
+                'button_text_color': '#000000',
+                'button_text_hover': '#000000',
+                'button_text_pressed': '#000000',
+                'splitter_color_background': '#cccccc',
+                'splitter_color_shine': '#ffffff',
+                'splitter_color_shadow': '#aaaaaa',
                 'table_row_even': '#fcfcfc',
                 'table_row_odd': '#f1f1f1',
                 'success': '#4caf50',
@@ -2908,6 +2980,13 @@ class AppSettings:
                 'toolbar_bg': '#fafafa',
                 'viewport_bg': '#ffffff',
                 'viewport_text': '#808080',
+                'titlebar_bg': '#f0f0f0',
+                'titlebar_text': '#000000',
+                'gadgetbar_bg': '#f0f0f0',
+                'gadgetbar_text': '#000000',
+                'handle_style': 'line',
+                'handle_color': '#cccccc',
+                'handle_size': '4',
             }
 
             # Merge defaults with theme colors (theme colors take priority)
@@ -2946,6 +3025,8 @@ class AppSettings:
             'button_pressed': '#b0b0b0',
             'selection_background': '#0078d4',
             'selection_text': '#ffffff',
+            'menu_highlight_bg': '#0078d4',
+            'menu_highlight_text': '#ffffff',
             'table_row_even': '#ffffff',
             'table_row_odd': '#f5f5f5',
             'success': '#4caf50',
@@ -2964,6 +3045,13 @@ class AppSettings:
             'toolbar_bg': '#fafafa',
             'viewport_bg': '#ffffff',
             'viewport_text': '#808080',
+            'titlebar_bg': '#f0f0f0',
+            'titlebar_text': '#000000',
+            'gadgetbar_bg': '#f0f0f0',
+            'gadgetbar_text': '#000000',
+            'handle_style': 'line',
+            'handle_color': '#cccccc',
+            'handle_size': '4',
         }
 
 
@@ -2994,6 +3082,10 @@ class AppSettings:
             'success':       QColor(76, 175, 80),
             'warning':       QColor(255, 152, 0),
             'border':        QColor(200, 200, 200),
+            'titlebar_bg':   QColor(240, 240, 240),
+            'titlebar_text': QColor(0, 0, 0),
+            'gadgetbar_bg':  QColor(240, 240, 240),
+            'gadgetbar_text':QColor(0, 0, 0),
         }
         return fallbacks.get(key, QColor(128, 128, 128))
 
@@ -3099,7 +3191,9 @@ class AppPanelEffect: #vers 1
         if effect == 'none' or not effect:
             return
 
-        p = QPainter(widget)
+        p = QPainter()
+        if not p.begin(widget):
+            return   # widget not paintable right now — skip silently
         p.setRenderHint(QPainter.RenderHint.Antialiasing, False)
         r = widget.rect()
 
@@ -3113,15 +3207,36 @@ class AppPanelEffect: #vers 1
         except Exception:
             pass
         finally:
-            p.end()
+            if p.isActive():
+                p.end()
 
     @staticmethod
-    def _paint_fill(p, r, cs): #vers 1
+    def _paint_fill(p, r, cs): #vers 3
         from PyQt6.QtGui import QColor, QLinearGradient
         from PyQt6.QtCore import QPointF
         ca = QColor(cs.get('panel_fill_a', '#1a1a2e'))
         cb = QColor(cs.get('panel_fill_b', '#16213e'))
-        d  = cs.get('panel_fill_dir', 0)
+
+        # panel_bg lives in theme JSON, not in current_settings -- fetch properly
+        panel_bg = cs.get('panel_bg') or cs.get('bg_primary', '')
+        if not panel_bg:
+            # Try to get from app_settings theme colors
+            try:
+                from PyQt6.QtWidgets import QApplication
+                app = QApplication.instance()
+                if app:
+                    win_col = app.palette().color(app.palette().ColorRole.Window)
+                    if win_col.lightness() > 128:
+                        panel_bg = win_col.name()
+            except Exception:
+                pass
+
+        if panel_bg:
+            theme_col = QColor(panel_bg)
+            if theme_col.lightness() > 128 and ca.lightness() < 64:
+                ca = cb = theme_col
+
+        d = cs.get('panel_fill_dir', 0)
         if d == 0:
             p.fillRect(r, ca)
             return
@@ -3139,12 +3254,31 @@ class AppPanelEffect: #vers 1
         p.fillRect(r, g)
 
     @staticmethod
-    def _paint_gradient(p, r, cs): #vers 1
+    def _paint_gradient(p, r, cs): #vers 3
         from PyQt6.QtGui import QColor, QLinearGradient
         from PyQt6.QtCore import QPointF
         s1 = QColor(cs.get('panel_grad_stop1', '#1a1a2e'))
         s2 = QColor(cs.get('panel_grad_stop2', '#2d1b4e'))
         s3 = QColor(cs.get('panel_grad_stop3', '#16213e'))
+
+        # Fetch theme window color from QApplication palette as fallback
+        panel_bg = cs.get('panel_bg') or cs.get('bg_primary', '')
+        if not panel_bg:
+            try:
+                from PyQt6.QtWidgets import QApplication
+                app = QApplication.instance()
+                if app:
+                    win_col = app.palette().color(app.palette().ColorRole.Window)
+                    if win_col.lightness() > 128:
+                        panel_bg = win_col.name()
+            except Exception:
+                pass
+
+        if panel_bg:
+            theme_col = QColor(panel_bg)
+            if theme_col.lightness() > 128 and s1.lightness() < 64:
+                s1 = s2 = s3 = theme_col
+
         d  = cs.get('panel_grad_dir', 1)
         pts = {
             0: (QPointF(r.left(), r.top()),    QPointF(r.right(), r.top())),
@@ -3198,10 +3332,9 @@ class AppPanelEffect: #vers 1
                 p.drawRect(r.left(), r.top()+row*scale, r.width(), scale)
 
 
-def apply_panel_effects(window, app_settings): #vers 1
+def apply_panel_effects(window, app_settings): #vers 3
     """Walk a window's panels and apply the current panel effect to each.
-    Call this after _apply_theme() in any window that uses app_settings.
-    Panels targeted: QGroupBox, QFrame with StyledPanel, central widget.
+    Skips: AppSettings dialog itself.
     """
     from PyQt6.QtWidgets import QGroupBox, QFrame
     cs = app_settings.current_settings
@@ -3210,13 +3343,43 @@ def apply_panel_effects(window, app_settings): #vers 1
     if effect == 'none':
         return
 
-    # Target panels — QGroupBox and StyledPanel QFrames
+    # Don't apply panel effects to the settings dialog itself
+    window_class = type(window).__name__
+    if 'Settings' in window_class or 'Dialog' in window_class:
+        return
+
+    # Merge theme colors into cs so _paint_fill can read panel_bg/bg_primary
+    # (these live in the theme JSON, not in current_settings)
+    try:
+        theme_colors = app_settings.get_theme_colors()
+        if theme_colors:
+            # Only add keys not already in cs (cs values take priority)
+            for key in ('panel_bg', 'bg_primary', 'bg_secondary'):
+                if key not in cs and key in theme_colors:
+                    cs = dict(cs)  # shallow copy so we don't mutate saved settings
+                    cs[key] = theme_colors[key]
+    except Exception:
+        pass
+
     for widget in window.findChildren(QGroupBox):
+        parent = widget.parent()
+        skip = False
+        while parent:
+            if 'Settings' in type(parent).__name__ or 'Dialog' in type(parent).__name__:
+                skip = True
+                break
+            parent = parent.parent() if hasattr(parent, 'parent') else None
+        if skip:
+            continue
+        widget._app_settings_ref = cs  # pass merged cs
         AppPanelEffect.install(widget, cs)
         widget.update()
 
     for widget in window.findChildren(QFrame):
+        if widget.objectName() in ('titlebar', 'gadgetbar'):
+            continue
         if widget.frameStyle() & QFrame.Shape.StyledPanel.value:
+            widget._app_settings_ref = cs
             AppPanelEffect.install(widget, cs)
             widget.update()
 
@@ -3255,7 +3418,9 @@ class PanelPreviewWidget(QWidget): #vers 1
         from PyQt6.QtGui import (QPainter, QColor, QLinearGradient,
                                   QPen, QBrush, QImage, QPixmap)
         from PyQt6.QtCore import QRectF, Qt, QPointF
-        p = QPainter(self)
+        p = QPainter()
+        if not p.begin(self):
+            return
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         r = self.rect()
         cs = self._get_colours()
@@ -3283,7 +3448,8 @@ class PanelPreviewWidget(QWidget): #vers 1
         p.setPen(QPen(QColor("#555555"), 1))
         p.setBrush(Qt.BrushStyle.NoBrush)
         p.drawRect(r.adjusted(0, 0, -1, -1))
-        p.end()
+        if p.isActive():
+            p.end()
 
     def _c(self, key, default="#1a1a2e"):
         return self._dlg.app_settings.current_settings.get(key, default)
@@ -3293,6 +3459,12 @@ class PanelPreviewWidget(QWidget): #vers 1
         from PyQt6.QtCore import QPointF
         ca = QColor(cs.get("panel_fill_a", "#1a1a2e"))
         cb = QColor(cs.get("panel_fill_b", "#16213e"))
+        # Light theme guard
+        panel_bg = cs.get('panel_bg') or cs.get('bg_primary', '')
+        if panel_bg:
+            tc = QColor(panel_bg)
+            if tc.lightness() > 128 and ca.lightness() < 64:
+                ca = cb = tc
         d  = cs.get("panel_fill_dir", 0)
         if d == 0:
             p.fillRect(r, ca)
@@ -4215,6 +4387,7 @@ class SettingsDialog(QDialog): #vers 15
         lay = QVBoxLayout(d)
 
         font_group = QGroupBox("Dialog Font")
+        font_group.setAutoFillBackground(True)
         fgl = QHBoxLayout(font_group)
         fgl.addWidget(QLabel("Family:"))
         fc = QFontComboBox()
@@ -4228,6 +4401,7 @@ class SettingsDialog(QDialog): #vers 15
         lay.addWidget(font_group)
 
         tb_group = QGroupBox("Titlebar")
+        tb_group.setAutoFillBackground(True)
         tgl = QHBoxLayout(tb_group)
         tgl.addWidget(QLabel("Height:"))
         tbs = QSpinBox(); tbs.setRange(28, 60)
@@ -4554,6 +4728,7 @@ class SettingsDialog(QDialog): #vers 15
 
         # Screen Color Picker Group
         picker_group = QGroupBox("Color Picker")
+        picker_group.setAutoFillBackground(True)
         picker_layout = QVBoxLayout(picker_group)
 
         self.color_picker = ColorPickerWidget()
@@ -4576,6 +4751,7 @@ class SettingsDialog(QDialog): #vers 15
 
     # - PALETTE COLORS GROUP
         palette_group = QGroupBox("Quick Colors")
+        palette_group.setAutoFillBackground(True)
         palette_layout = QVBoxLayout(palette_group)
 
         # Top bar: Grid toggle + Retro menu
@@ -4880,6 +5056,8 @@ class SettingsDialog(QDialog): #vers 15
             "button_pressed": "Button - Pressed",
             "selection_background": "Selection - Background",
             "selection_text": "Selection - Text",
+            "menu_highlight_bg": "Menu - Highlight Background",
+            "menu_highlight_text": "Menu - Highlight Text",
             "table_row_even": "Table Row - Even",
             "table_row_odd": "Table Row - Odd",
             "alternate_row": "Alternate Row",
@@ -4897,6 +5075,10 @@ class SettingsDialog(QDialog): #vers 15
             "panel_entries": "Panel - Entries",
             "panel_filter": "Panel - Filter",
             "toolbar_bg": "Toolbar Background",
+            "gadgetbar_bg": "Gadget Bar Background",
+            "gadgetbar_text": "Gadget Bar Text",
+            "titlebar_bg": "Title Bar Background",
+            "titlebar_text": "Title Bar Text",
             "button_text_color": "Button Text - Normal",
             "button_text_hover": "Button Text - Hover",
             "button_text_pressed": "Button Text - Pressed",
@@ -4930,13 +5112,14 @@ class SettingsDialog(QDialog): #vers 15
             "window_text":               "Window - Text",
             "base":                      "Base",
             "alternate_base":            "Alternate - Base",
-            "tooltip_bg":                "Toolbar - Background",
-            "tooltip_text":              "Toolbar - Text",
+            "tooltip_bg":                "Tooltip - Background",
+            "tooltip_text":              "Tooltip - Text",
             "placeholder_text":          "Placeholder - Text",
             "disabled_text":             "Disabled - Text"
         }
 
         selection_group = QGroupBox("Apply Picked Color")
+        selection_group.setAutoFillBackground(True)
         selection_layout = QVBoxLayout(selection_group)
 
         self.selected_element_combo = QComboBox()
@@ -5136,6 +5319,7 @@ class SettingsDialog(QDialog): #vers 15
 
         # GLOBAL THEME SLIDERS - MOVED TO RIGHT PANEL BOTTOM (above Theme Actions)
         global_sliders_group = QGroupBox("Global Theme Sliders")
+        global_sliders_group.setAutoFillBackground(True)
         global_sliders_layout = QVBoxLayout(global_sliders_group)
 
         info_label = QLabel("<b>Adjust ALL colors globally:</b>")
@@ -5202,6 +5386,7 @@ class SettingsDialog(QDialog): #vers 15
         # THEME ACTIONS GROUP - AT BOTTOM OF RIGHT PANEL
         theme_layout = QHBoxLayout()  # was QHBoxLayout(self) which corrupted dialog layout
         theme_actions_group = QGroupBox("Theme Actions")
+        theme_actions_group.setAutoFillBackground(True)
 
         # Use horizontal layout instead of vertical
         theme_actions_layout = QHBoxLayout(theme_actions_group)
@@ -5324,6 +5509,7 @@ class SettingsDialog(QDialog): #vers 15
 
         # ========== BUTTON STYLING ==========
         button_group = QGroupBox("Button Styling")
+        button_group.setAutoFillBackground(True)
         button_layout = QVBoxLayout(button_group)
 
         # Button Shape
@@ -5395,6 +5581,7 @@ class SettingsDialog(QDialog): #vers 15
 
         # ========== SLIDER STYLING ==========
         slider_group = QGroupBox("Slider Styling")
+        slider_group.setAutoFillBackground(True)
         slider_layout = QVBoxLayout(slider_group)
 
         # Slider Height
@@ -5442,6 +5629,7 @@ class SettingsDialog(QDialog): #vers 15
 
         # ========== CHECKBOX STYLING ==========
         checkbox_group = QGroupBox("Checkbox Styling")
+        checkbox_group.setAutoFillBackground(True)
         checkbox_layout = QVBoxLayout(checkbox_group)
 
         # Checkbox Size
@@ -5477,6 +5665,7 @@ class SettingsDialog(QDialog): #vers 15
 
         # ========== SCROLLBAR STYLING ==========
         scrollbar_group = QGroupBox("Scrollbar Styling")
+        scrollbar_group.setAutoFillBackground(True)
         scrollbar_layout = QVBoxLayout(scrollbar_group)
 
         # Scrollbar Width
@@ -5519,6 +5708,7 @@ class SettingsDialog(QDialog): #vers 15
 
         # ========== SPLITTER STYLING ==========
         splitter_group = QGroupBox("Splitter Styling")
+        splitter_group.setAutoFillBackground(True)
         splitter_layout = QVBoxLayout(splitter_group)
 
         # Splitter Width
@@ -5566,10 +5756,34 @@ class SettingsDialog(QDialog): #vers 15
         grip_layout.addStretch()
         splitter_layout.addLayout(grip_layout)
 
+        # Handle Style — 4 types
+        hs_layout = QHBoxLayout()
+        hs_layout.addWidget(QLabel("Handle Style:"))
+        self.handle_style_combo = QComboBox()
+        self.handle_style_combo.addItems(["line", "gradient", "dots", "invisible"])
+        cs_now = getattr(self, 'current_settings', {})
+        self.handle_style_combo.setCurrentText(cs_now.get('handle_style', 'line'))
+        self.handle_style_combo.currentTextChanged.connect(self._update_gadget_preview)
+        self.handle_style_combo.currentTextChanged.connect(
+            lambda v: self.current_settings.update({'handle_style': v}))
+        hs_layout.addWidget(self.handle_style_combo, 1)
+        splitter_layout.addLayout(hs_layout)
+
+        # Hide handles when docked
+        hd_layout = QHBoxLayout()
+        self.handle_hide_docked = QCheckBox("Hide handles when docked")
+        self.handle_hide_docked.setChecked(cs_now.get('handle_hide_docked', False))
+        self.handle_hide_docked.stateChanged.connect(
+            lambda v: self.current_settings.update({'handle_hide_docked': bool(v)}))
+        hd_layout.addWidget(self.handle_hide_docked)
+        hd_layout.addStretch()
+        splitter_layout.addLayout(hd_layout)
+
         scroll_layout.addWidget(splitter_group)
 
         # ========== ADVANCED STYLING ==========
         advanced_group = QGroupBox("Advanced Styling")
+        advanced_group.setAutoFillBackground(True)
         advanced_layout = QVBoxLayout(advanced_group)
 
         # Panel Opacity
@@ -6025,6 +6239,7 @@ class SettingsDialog(QDialog): #vers 15
 
         #    Size controls                                                  
         size_group = QGroupBox("Button & Titlebar Sizes")
+        size_group.setAutoFillBackground(True)
         szl = QGridLayout(size_group)
         szl.setColumnStretch(1, 1)
 
@@ -6059,6 +6274,7 @@ class SettingsDialog(QDialog): #vers 15
 
         #   Style selector
         style_group = QGroupBox("Button Style")
+        style_group.setAutoFillBackground(True)
         sg_lay = QVBoxLayout(style_group)
 
         STYLES = [
@@ -6098,6 +6314,7 @@ class SettingsDialog(QDialog): #vers 15
 
         #   Live preview
         preview_group = QGroupBox("Preview")
+        preview_group.setAutoFillBackground(True)
         pg_lay = QHBoxLayout(preview_group)
         pg_lay.setSpacing(8)
 
@@ -6121,6 +6338,7 @@ class SettingsDialog(QDialog): #vers 15
 
         #   Tint on/off
         tint_group = QGroupBox("Workflow Colour Tints")
+        tint_group.setAutoFillBackground(True)
         tg_lay = QVBoxLayout(tint_group)
         self._tint_enabled_cb = QCheckBox("Enable workflow colour tints on buttons")
         self._tint_enabled_cb.setChecked(
@@ -6328,6 +6546,7 @@ class SettingsDialog(QDialog): #vers 15
 
         # Light/Dark theme toggle
         theme_type_group = QGroupBox("Button Color Mode")
+        theme_type_group.setAutoFillBackground(True)
         theme_type_layout = QHBoxLayout(theme_type_group)
 
         theme_type_layout.addWidget(QLabel("Editing colors for:"))
@@ -6728,6 +6947,7 @@ class SettingsDialog(QDialog): #vers 15
 
         # Theme Selection Group
         theme_group = QGroupBox("Theme Selection")
+        theme_group.setAutoFillBackground(True)
         theme_layout = QVBoxLayout(theme_group)
 
         # Current theme display
@@ -6758,6 +6978,7 @@ class SettingsDialog(QDialog): #vers 15
 
         # Real-time Controls Group
         controls_group = QGroupBox("Live Controls")
+        controls_group.setAutoFillBackground(True)
         controls_layout = QVBoxLayout(controls_group)
 
         # Instant apply toggle
@@ -6785,6 +7006,7 @@ class SettingsDialog(QDialog): #vers 15
 
         # Quick Themes Group
         quick_group = QGroupBox("🚀 Quick Themes")
+        quick_group.setAutoFillBackground(True)
         quick_layout = QVBoxLayout(quick_group)
 
         # Popular themes
@@ -6810,6 +7032,7 @@ class SettingsDialog(QDialog): #vers 15
 
         # Theme Info Group
         info_group = QGroupBox("Theme Info")
+        info_group.setAutoFillBackground(True)
         info_layout = QVBoxLayout(info_group)
 
         self.theme_info_label = QLabel()
@@ -6829,6 +7052,7 @@ class SettingsDialog(QDialog): #vers 15
 
         # Preview Header
         preview_header = QGroupBox("Live Preview - App Factory Interface")
+        preview_header.setAutoFillBackground(True)
         header_layout = QHBoxLayout(preview_header)
 
         self.preview_status = QLabel("Ready for preview")
@@ -6845,6 +7069,7 @@ class SettingsDialog(QDialog): #vers 15
 
         # Sample App Factory Toolbar
         toolbar_group = QGroupBox("Sample Toolbar")
+        toolbar_group.setAutoFillBackground(True)
         toolbar_layout = QGridLayout(toolbar_group)
 
         self.demo_buttons = []
@@ -6872,6 +7097,7 @@ class SettingsDialog(QDialog): #vers 15
 
         # Sample Table
         table_group = QGroupBox("Sample IMG Entries Table")
+        table_group.setAutoFillBackground(True)
         table_layout = QVBoxLayout(table_group)
 
         self.demo_table = QTableWidget(5, 5)
@@ -6886,6 +7112,7 @@ class SettingsDialog(QDialog): #vers 15
 
         # Sample Log Output
         log_group = QGroupBox("Sample Activity Log")
+        log_group.setAutoFillBackground(True)
         log_layout = QVBoxLayout(log_group)
 
         self.demo_log = QTextEdit()
@@ -6907,6 +7134,7 @@ Ready for operations..."""
 
         # Preview Statistics
         stats_group = QGroupBox("Preview Statistics")
+        stats_group.setAutoFillBackground(True)
         stats_layout = QGridLayout(stats_group)
 
         self.stats_labels = {}
@@ -6941,6 +7169,7 @@ Ready for operations..."""
 
         # Debug Mode Group
         debug_group = QGroupBox("Debug Mode")
+        debug_group.setAutoFillBackground(True)
         debug_layout = QVBoxLayout(debug_group)
 
         self.debug_enabled_check = QCheckBox("Enable debug mode")
@@ -6965,6 +7194,7 @@ Ready for operations..."""
 
         # Debug Categories
         categories_group = QGroupBox("Debug Categories")
+        categories_group.setAutoFillBackground(True)
         categories_layout = QGridLayout(categories_group)
 
         self.debug_categories = {}
@@ -7062,7 +7292,7 @@ Ready for operations..."""
         # Instructions
         info_label = QLabel("Configure fonts for different UI elements. Changes are saved to appfactory.settings.json")
         info_label.setWordWrap(True)
-        info_label.setStyleSheet("color: #666; font-style: italic; padding: 8px;")
+        info_label.setStyleSheet("color: palette(mid); font-style: italic; padding: 8px;")
         layout.addWidget(info_label)
 
         # Scroll area for font groups
@@ -7117,14 +7347,15 @@ Ready for operations..."""
 
     def _create_font_control_group(self, font_id, title, description,
                                 default_family, default_size,
-                                min_size, max_size): #vers 1
+                                min_size, max_size): #vers 2
         """Create a font control group for specific font type"""
         group = QGroupBox(title)
+        group.setAutoFillBackground(True)
         layout = QVBoxLayout(group)
 
         # Description
         desc_label = QLabel(description)
-        desc_label.setStyleSheet("color: #888; font-style: italic; font-size: 8pt;")
+        desc_label.setStyleSheet("color: palette(mid); font-style: italic; font-size: 8pt;")
         layout.addWidget(desc_label)
 
         # Font controls row
@@ -7317,6 +7548,7 @@ Ready for operations..."""
 
         # Button Display Mode
         button_display_group = QGroupBox("Button Display Mode")
+        button_display_group.setAutoFillBackground(True)
         button_display_layout = QVBoxLayout(button_display_group)
 
         self.button_display_combo = QComboBox()
@@ -7351,6 +7583,7 @@ Ready for operations..."""
 
         # Window Controls
         window_group = QGroupBox("Window Controls")
+        window_group.setAutoFillBackground(True)
         window_layout = QVBoxLayout(window_group)
 
         self.custom_gadgets_check = QCheckBox("Use custom window gadgets (TXD Workshop style)")
@@ -7374,6 +7607,7 @@ Ready for operations..."""
 
         # Interface Options
         interface_group = QGroupBox("Interface Options")
+        interface_group.setAutoFillBackground(True)
         interface_layout = QVBoxLayout(interface_group)
 
         self.tooltips_check = QCheckBox("Show tooltips")
@@ -7392,6 +7626,7 @@ Ready for operations..."""
 
         # Pin Warnings
         pin_warn_group = QGroupBox("Pinned Entry Warnings")
+        pin_warn_group.setAutoFillBackground(True)
         pin_warn_layout = QVBoxLayout(pin_warn_group)
 
         self.pin_warn_popup_check = QCheckBox("Show popup when a pinned entry is protected")
@@ -7412,6 +7647,7 @@ Ready for operations..."""
 
         # Rename Notifications
         rename_notify_group = QGroupBox("Rename Notifications")
+        rename_notify_group.setAutoFillBackground(True)
         rename_notify_layout = QVBoxLayout(rename_notify_group)
 
         self.rename_notify_popup_check = QCheckBox("Show popup on successful rename")
@@ -7453,6 +7689,7 @@ Ready for operations..."""
         il.setSpacing(8)
 
         img_group = QGroupBox("Panel Background Image")
+        img_group.setAutoFillBackground(True)
         igl = QVBoxLayout(img_group)
 
         path_lay = QHBoxLayout()
@@ -7644,6 +7881,7 @@ Ready for operations..."""
         pl = QVBoxLayout(pb_tab)
 
         style_group = QGroupBox("Progress Bar Style")
+        style_group.setAutoFillBackground(True)
         sgl = QVBoxLayout(style_group)
 
         PB_STYLES = [
@@ -7673,6 +7911,7 @@ Ready for operations..."""
         pl.addWidget(style_group)
 
         colour_group = QGroupBox("Progress Bar Colours")
+        colour_group.setAutoFillBackground(True)
         cgl = QGridLayout(colour_group)
 
         for row, (label, key, default) in enumerate([
@@ -7692,6 +7931,7 @@ Ready for operations..."""
         pl.addWidget(colour_group)
 
         height_group = QGroupBox("Height")
+        height_group.setAutoFillBackground(True)
         hgl = QHBoxLayout(height_group)
         self._pb_height_slider = QSlider(Qt.Orientation.Horizontal)
         self._pb_height_slider.setRange(8, 32)
@@ -7721,6 +7961,7 @@ Ready for operations..."""
 
         #   Auto-detect
         detect_group = QGroupBox("System Locale Detection")
+        detect_group.setAutoFillBackground(True)
         dgl = QVBoxLayout(detect_group)
 
         self._locale_auto_cb = QCheckBox("Auto-detect locale from system on startup")
@@ -7744,6 +7985,7 @@ Ready for operations..."""
 
         #   Language
         lang_group = QGroupBox("Language")
+        lang_group.setAutoFillBackground(True)
         lgl = QGridLayout(lang_group)
 
         LANGUAGES = [
@@ -7781,6 +8023,7 @@ Ready for operations..."""
 
         #   Date & Number formats
         fmt_group = QGroupBox("Date & Number Formats")
+        fmt_group.setAutoFillBackground(True)
         fgl = QGridLayout(fmt_group)
 
         fgl.addWidget(QLabel("Date format:"), 0, 0)
@@ -7810,6 +8053,7 @@ Ready for operations..."""
 
         #   Per-app overrides
         override_group = QGroupBox("Per-Workshop Language Override")
+        override_group.setAutoFillBackground(True)
         ogl = QVBoxLayout(override_group)
         ogl.addWidget(QLabel(
             "Future: each workshop can use a different language file.\n"
@@ -7858,6 +8102,7 @@ Ready for operations..."""
 
         # Panel Background
         panel_group = QGroupBox("Panel Background")
+        panel_group.setAutoFillBackground(True)
         panel_layout = QVBoxLayout(panel_group)
 
         # Panel Background Image
@@ -7890,6 +8135,7 @@ Ready for operations..."""
 
         # Primary Background
         primary_group = QGroupBox("Primary Background")
+        primary_group.setAutoFillBackground(True)
         primary_layout = QVBoxLayout(primary_group)
 
         # Primary Background Image
@@ -7922,6 +8168,7 @@ Ready for operations..."""
 
         # Secondary Background
         secondary_group = QGroupBox("Secondary Background")
+        secondary_group.setAutoFillBackground(True)
         secondary_layout = QVBoxLayout(secondary_group)
 
         # Secondary Background Image
@@ -7954,6 +8201,7 @@ Ready for operations..."""
 
         # Button Background
         button_group = QGroupBox("Button Background")
+        button_group.setAutoFillBackground(True)
         button_layout = QVBoxLayout(button_group)
 
         # Button Background Image
@@ -8015,6 +8263,7 @@ Ready for operations..."""
 
         # Titlebar Transparency
         titlebar_group = QGroupBox("Titlebar Transparency")
+        titlebar_group.setAutoFillBackground(True)
         titlebar_layout = QVBoxLayout(titlebar_group)
 
         # Titlebar Opacity
@@ -8039,6 +8288,7 @@ Ready for operations..."""
 
         # Panel Transparency
         panel_group = QGroupBox("Panel Transparency")
+        panel_group.setAutoFillBackground(True)
         panel_layout = QVBoxLayout(panel_group)
 
         # Panel Opacity
@@ -8063,6 +8313,7 @@ Ready for operations..."""
 
         # Button Transparency
         button_group = QGroupBox("Button Transparency")
+        button_group.setAutoFillBackground(True)
         button_layout = QVBoxLayout(button_group)
 
         # Button Opacity
@@ -8087,6 +8338,7 @@ Ready for operations..."""
 
         # Widget Transparency
         widget_group = QGroupBox("Widget Transparency")
+        widget_group.setAutoFillBackground(True)
         widget_layout = QVBoxLayout(widget_group)
 
         # Widget Opacity
@@ -8140,6 +8392,7 @@ Ready for operations..."""
 
         # Button Shadow Settings
         button_shadow_group = QGroupBox("Button Shadows")
+        button_shadow_group.setAutoFillBackground(True)
         button_shadow_layout = QVBoxLayout(button_shadow_group)
 
         # Shadow Depth
@@ -8200,6 +8453,7 @@ Ready for operations..."""
 
         # Panel Shadow Settings
         panel_shadow_group = QGroupBox("Panel Shadows")
+        panel_shadow_group.setAutoFillBackground(True)
         panel_shadow_layout = QVBoxLayout(panel_shadow_group)
 
         # Shadow Depth
@@ -8260,6 +8514,7 @@ Ready for operations..."""
 
         # General Shadow Settings
         general_shadow_group = QGroupBox("General Shadow Settings")
+        general_shadow_group.setAutoFillBackground(True)
         general_shadow_layout = QVBoxLayout(general_shadow_group)
 
         # Enable Shadows
@@ -8309,6 +8564,7 @@ Ready for operations..."""
 
         # String Gadgets
         string_group = QGroupBox("String Gadgets")
+        string_group.setAutoFillBackground(True)
         string_layout = QVBoxLayout(string_group)
 
         # String Background Color
@@ -8342,6 +8598,7 @@ Ready for operations..."""
 
         # Gauge Gadgets
         gauge_group = QGroupBox("Gauge Gadgets")
+        gauge_group.setAutoFillBackground(True)
         gauge_layout = QVBoxLayout(gauge_group)
 
         # Gauge Background Color
@@ -8375,6 +8632,7 @@ Ready for operations..."""
 
         # Scale Gadgets
         scale_group = QGroupBox("Scale Gadgets")
+        scale_group.setAutoFillBackground(True)
         scale_layout = QVBoxLayout(scale_group)
 
         # Scale Background Color
@@ -8399,6 +8657,7 @@ Ready for operations..."""
 
         # Colorfield Gadgets
         colorfield_group = QGroupBox("Colorfield Gadgets")
+        colorfield_group.setAutoFillBackground(True)
         colorfield_layout = QVBoxLayout(colorfield_group)
 
         # Colorfield Background Color
@@ -8423,6 +8682,7 @@ Ready for operations..."""
 
         # List Gadgets
         list_group = QGroupBox("List Gadgets")
+        list_group.setAutoFillBackground(True)
         list_layout = QVBoxLayout(list_group)
 
         # List Background Color
@@ -8456,6 +8716,7 @@ Ready for operations..."""
 
         # Numeric Gadgets
         numeric_group = QGroupBox("Numeric Gadgets")
+        numeric_group.setAutoFillBackground(True)
         numeric_layout = QVBoxLayout(numeric_group)
 
         # Numeric Background Color
@@ -8480,6 +8741,7 @@ Ready for operations..."""
 
         # Knob Gadgets
         knob_group = QGroupBox("Knob Gadgets")
+        knob_group.setAutoFillBackground(True)
         knob_layout = QVBoxLayout(knob_group)
 
         # Knob Background Color
@@ -8504,6 +8766,7 @@ Ready for operations..."""
 
         # Levelmeter Gadgets
         levelmeter_group = QGroupBox("Levelmeter Gadgets")
+        levelmeter_group.setAutoFillBackground(True)
         levelmeter_layout = QVBoxLayout(levelmeter_group)
 
         # Levelmeter Background Color
@@ -8528,6 +8791,7 @@ Ready for operations..."""
 
         # Radio Gadgets
         radio_group = QGroupBox("Radio Gadgets")
+        radio_group.setAutoFillBackground(True)
         radio_layout = QVBoxLayout(radio_group)
 
         # Radio Background Color
@@ -8552,6 +8816,7 @@ Ready for operations..."""
 
         # Cycle Gadgets
         cycle_group = QGroupBox("Cycle Gadgets")
+        cycle_group.setAutoFillBackground(True)
         cycle_layout = QVBoxLayout(cycle_group)
 
         # Cycle Background Color
@@ -8576,6 +8841,7 @@ Ready for operations..."""
 
         # Palette Gadgets
         palette_group = QGroupBox("Palette Gadgets")
+        palette_group.setAutoFillBackground(True)
         palette_layout = QVBoxLayout(palette_group)
 
         # Palette Background Color
@@ -8600,6 +8866,7 @@ Ready for operations..."""
 
         # Popstring Gadgets
         popstring_group = QGroupBox("Popstring Gadgets")
+        popstring_group.setAutoFillBackground(True)
         popstring_layout = QVBoxLayout(popstring_group)
 
         # Popstring Background Color
@@ -8715,6 +8982,7 @@ Ready for operations..."""
 
         # Group Components
         group_group = QGroupBox("Group Components")
+        group_group.setAutoFillBackground(True)
         group_layout = QVBoxLayout(group_group)
 
         # Group Background Color
@@ -8739,6 +9007,7 @@ Ready for operations..."""
 
         # Scrollbar Components
         scrollbar_group = QGroupBox("Scrollbar Components")
+        scrollbar_group.setAutoFillBackground(True)
         scrollbar_layout = QVBoxLayout(scrollbar_group)
 
         # Scrollbar Background Color
@@ -8781,6 +9050,7 @@ Ready for operations..."""
 
         # Listview Components
         listview_group = QGroupBox("Listview Components")
+        listview_group.setAutoFillBackground(True)
         listview_layout = QVBoxLayout(listview_group)
 
         # Listview Background Color
@@ -8814,6 +9084,7 @@ Ready for operations..."""
 
         # Register Components
         register_group = QGroupBox("Register Components")
+        register_group.setAutoFillBackground(True)
         register_layout = QVBoxLayout(register_group)
 
         # Register Background Color
@@ -8838,6 +9109,7 @@ Ready for operations..."""
 
         # Virtgroup Components
         virtgroup_group = QGroupBox("Virtgroup Components")
+        virtgroup_group.setAutoFillBackground(True)
         virtgroup_layout = QVBoxLayout(virtgroup_group)
 
         # Virtgroup Background Color
@@ -8862,6 +9134,7 @@ Ready for operations..."""
 
         # Scrollgroup Components
         scrollgroup_group = QGroupBox("Scrollgroup Components")
+        scrollgroup_group.setAutoFillBackground(True)
         scrollgroup_layout = QVBoxLayout(scrollgroup_group)
 
         # Scrollgroup Background Color
@@ -8886,6 +9159,7 @@ Ready for operations..."""
 
         # Popobject Components
         popobject_group = QGroupBox("Popobject Components")
+        popobject_group.setAutoFillBackground(True)
         popobject_layout = QVBoxLayout(popobject_group)
 
         # Popobject Background Color
@@ -9382,21 +9656,26 @@ Ready for operations..."""
         if hasattr(self, 'font_controls'):
             self._save_font_settings()
 
-        # ⭐ CRITICAL FIX: Save modified colors to the actual theme JSON file
+        # Save all modified colors, button colors and settings to theme JSON
+        modified = {}
         if hasattr(self, '_modified_colors') and self._modified_colors:
+            modified.update(self._modified_colors)
+        if hasattr(self, '_modified_button_colors') and self._modified_button_colors:
+            modified.update(self._modified_button_colors)
+        if hasattr(self, 'handle_style_combo'):
+            modified['handle_style'] = self.handle_style_combo.currentText()
+        if modified:
             current_theme = self.app_settings.current_settings["theme"]
             if current_theme in self.app_settings.themes:
-                # Update in-memory theme
                 if "colors" not in self.app_settings.themes[current_theme]:
                     self.app_settings.themes[current_theme]["colors"] = {}
-                self.app_settings.themes[current_theme]["colors"].update(self._modified_colors)
+                self.app_settings.themes[current_theme]["colors"].update(modified)
 
-                # THIS IS THE FIX: Actually save theme to disk
                 theme_data = self.app_settings.themes[current_theme]
                 success = self.app_settings.save_theme(current_theme, theme_data)
 
                 if success:
-                    print(f"Saved {len(self._modified_colors)} color changes to theme: {current_theme}")
+                    print(f"Saved {len(modified)} color changes to theme: {current_theme}")
                 else:
                     print(f"Failed to save theme: {current_theme}")
                     QMessageBox.warning(
@@ -10162,10 +10441,20 @@ def _clear_debug_log(self):
         from PyQt6.QtWidgets import QMessageBox
         QMessageBox.information(self, "Clear Log", "Activity log cleared (if available).")
 
-def apply_theme_to_app(app, app_settings):
-    """Apply theme to entire application"""
+def apply_theme_to_app(app, app_settings): #vers 2
+    """Apply theme to entire application — force repaint all widgets."""
     stylesheet = app_settings.get_stylesheet()
     app.setStyleSheet(stylesheet)
+    # Force Qt to re-evaluate styles on all existing widgets
+    # Without this, widgets with WA_StyledBackground set after init
+    # keep their old palette on theme switch
+    for widget in app.allWidgets():
+        try:
+            app.style().unpolish(widget)
+            app.style().polish(widget)
+            widget.update()
+        except Exception:
+            pass
 
 
 def hsl_to_rgb(h, s, l): #vers 1
