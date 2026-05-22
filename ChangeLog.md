@@ -239,3 +239,24 @@ Plan:
 - [ ] EMD wireframe viewer (vertex/face, QPainter, page 5)
 - [ ] SCD script hex browser
 - [ ] Export room data to JSON for external editing
+
+---
+
+## May 22 2026 - Session 6 (app_settings_system update)
+
+### Updated Files (from you)
+- **apps/utils/app_settings_system.py** v69 - Ported from IMG Factory
+  - 41 themes now loading correctly (was broken)
+  - AppSettings.__init__: Windows-compatible path handling
+  - AppSettings.current_settings: always a valid dict (never None)
+  - get_stylesheet(), get_theme_colors(): both verified working
+  - SettingsDialog v15: updated UI with theme preview
+  - New themes added: better_purple_dark, test_flat, test_grey_flat, App_Factory
+
+### Verified Working
+- AppSettings() -> current_settings is valid dict (82 keys)
+- get_stylesheet() returns non-empty stylesheet
+- get_theme_colors() returns color dict with bg_primary, accent_primary etc.
+- _show_settings_dialog() guard against None app_settings still correct
+- No GTA-specific key conflicts in ResBio context
+- All syntax checks pass
