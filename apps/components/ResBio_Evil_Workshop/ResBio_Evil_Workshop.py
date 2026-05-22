@@ -1606,11 +1606,6 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         self.titlebar.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
         self.titlebar.setMouseTracking(True)
 
-        self.layout = QHBoxLayout(self.titlebar)
-        self.layout.setContentsMargins(*self.get_content_margins())
-        self.layout.setSpacing(self.setspacing)
-
-        # Get icon color from theme
         icon_color = self._get_icon_color()
 
         self.toolbar = QFrame()
@@ -1621,276 +1616,108 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         layout.setContentsMargins(*self.get_panel_margins())
         layout.setSpacing(self.panelspacing)
 
-        # Settings button
-        self.settings_btn = QPushButton()
+        # ── LEFT GROUP: Menu · Settings · RE-Ref ──────────────────
+        self.menu_btn = QPushButton("Menu")
+        self.menu_btn.setFont(self.button_font)
+        self.menu_btn.setIcon(ResBioSVGIcons.manage_icon())
+        self.menu_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
+        self.menu_btn.setToolTip("Application Menu")
+        self.menu_btn.clicked.connect(self._show_app_menu)
+        layout.addWidget(self.menu_btn)
+
+        self.settings_btn = QPushButton("Settings")
         self.settings_btn.setFont(self.button_font)
-        #self.settings_btn.setIcon(ResBioSVGIcons.settings_icon())
-        self.settings_btn.setText("Settings")
+        self.settings_btn.setIcon(ResBioSVGIcons.settings_icon())
         self.settings_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
-        self.settings_btn.clicked.connect(self._show_workshop_settings)
         self.settings_btn.setToolTip("Workshop Settings")
+        self.settings_btn.clicked.connect(self._show_workshop_settings)
         layout.addWidget(self.settings_btn)
 
-        layout.addStretch()
-
-        # App title in center
-        self.title_label = QLabel(App_name)
-        self.title_label.setFont(self.title_font)
-        self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.title_label)
-
-        layout.addStretch()
-        #layout.addStretch()
-
-        #Research button here.
-        self.research_btn = QPushButton("Research")
+        self.research_btn = QPushButton("RE-Ref")
         self.research_btn.setFont(self.button_font)
         self.research_btn.setIcon(ResBioSVGIcons.research_icon())
         self.research_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
-        self.research_btn.setToolTip("Open Research Database (Ctrl+R)")
+        self.research_btn.setToolTip("RE File Format Reference / Research Database (Ctrl+R)")
         self.research_btn.clicked.connect(self._on_research_clicked)
         layout.addWidget(self.research_btn)
 
-        # Only show "Open IMG" button if NOT standalone
-        if not self.standalone_mode:
-            self.open_img_btn = QPushButton("OpenIMG")
-            self.open_img_btn.setFont(self.button_font)
-            self.open_img_btn.setIcon(ResBioSVGIcons.folder_icon())
-            self.open_img_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
-            self.open_img_btn.clicked.connect(self.open_img_archive)
-            layout.addWidget(self.open_img_btn)
+        # ── CENTRE: Title ─────────────────────────────────────────
+        layout.addStretch()
+        self.title_label = QLabel(f"{App_name} v{App_version}")
+        self.title_label.setFont(self.title_font)
+        self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.title_label)
+        layout.addStretch()
 
-        # Open button
-        self.open_btn = QPushButton()
+        # ── RIGHT GROUP: Open · Save · Extract · Undo · ─ · □ · ✕ ─
+        self.open_btn = QPushButton("Open")
         self.open_btn.setFont(self.button_font)
         self.open_btn.setIcon(ResBioSVGIcons.open_icon())
-        self.open_btn.setText("Open")
         self.open_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         self.open_btn.setShortcut("Ctrl+O")
-        if self.button_display_mode == 'icons':
-            self.open_btn.setFixedSize(self.iconsizex, self.iconsizey)
-
-        self.open_btn.setToolTip("Open COL file (Ctrl+O)")
+        self.open_btn.setToolTip("Open RDT room file (Ctrl+O)")
         self.open_btn.clicked.connect(self._open_file)
         layout.addWidget(self.open_btn)
 
-        # Open TIM button
-        self.open_tim_btn = QPushButton()
-        self.open_tim_btn.setFont(self.button_font)
-        self.open_tim_btn.setIcon(ResBioSVGIcons.paint_icon())
-        self.open_tim_btn.setText("TIM")
-        self.open_tim_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
-        self.open_tim_btn.setToolTip("Open TIM texture file")
-        self.open_tim_btn.clicked.connect(self._open_tim_file)
-        layout.addWidget(self.open_tim_btn)
-
-        # Disc Manager button
-        self.disc_btn = QPushButton()
-        self.disc_btn.setFont(self.button_font)
-        self.disc_btn.setIcon(ResBioSVGIcons.chip_icon())
-        self.disc_btn.setText("Disc")
-        self.disc_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
-        self.disc_btn.setToolTip("Open disc image (ISO/BIN/CUE/CCD/IMG/7z/RAR/ZIP)")
-        self.disc_btn.clicked.connect(self._open_disc_manager)
-        layout.addWidget(self.disc_btn)
-
-        # Unpack button
-        self.unpack_btn = QPushButton()
-        self.unpack_btn.setFont(self.button_font)
-        self.unpack_btn.setIcon(ResBioSVGIcons.package_icon())
-        self.unpack_btn.setText("Unpack")
-        self.unpack_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
-        self.unpack_btn.setToolTip("Unpack RE game files (PAK/PRS/BSS/ROFS/BIN)")
-        self.unpack_btn.clicked.connect(self._open_unpack_dialog)
-        layout.addWidget(self.unpack_btn)
-
-        # Save button
-        self.save_btn = QPushButton()
+        self.save_btn = QPushButton("Save")
         self.save_btn.setFont(self.button_font)
         self.save_btn.setIcon(ResBioSVGIcons.save_icon())
-        self.save_btn.setText("Save")
         self.save_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
         self.save_btn.setShortcut("Ctrl+S")
-        if self.button_display_mode == 'icons':
-            self.save_btn.setFixedSize(self.iconsizex, self.iconsizey)
-
-        self.save_btn.setEnabled(False)  # Enable when modified
+        self.save_btn.setEnabled(False)
         self.save_btn.setToolTip("Save RDT file (Ctrl+S)")
         self.save_btn.clicked.connect(self._save_file)
         layout.addWidget(self.save_btn)
 
-        # Export JSON button
-        self.export_btn = QPushButton()
-        self.export_btn.setFont(self.button_font)
-        self.export_btn.setIcon(ResBioSVGIcons.export_icon())
-        self.export_btn.setText("Export")
-        self.export_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
-        self.export_btn.setToolTip("Export room data to JSON")
-        self.export_btn.setEnabled(False)
-        self.export_btn.clicked.connect(self._export_room_json)
-        layout.addWidget(self.export_btn)
-
-        # Save button
-        self.saveall_btn = QPushButton()
-        self.saveall_btn.setFont(self.button_font)
-        self.saveall_btn.setIcon(ResBioSVGIcons.saveas_icon())
-        self.saveall_btn.setText("Save All")
-        self.saveall_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
-        self.saveall_btn.setShortcut("Ctrl+S")
-        if self.button_display_mode == 'icons':
-            self.saveall_btn.setFixedSize(self.iconsizex, self.iconsizey)
-
-        self.saveall_btn.setEnabled(False)  # Enable when modified
-        self.saveall_btn.setToolTip("Save COL file (Ctrl+S)")
-        #self.saveall_btn.clicked.connect(self._saveall_file)
-        #layout.addWidget(self.saveall_btn)
-
         self.export_all_btn = QPushButton("Extract")
         self.export_all_btn.setFont(self.button_font)
-        self.export_all_btn.setIcon(ResBioSVGIcons.package_icon())
+        self.export_all_btn.setIcon(ResBioSVGIcons.uncompress_icon())
         self.export_all_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
-        if self.button_display_mode == 'icons':
-            self.export_all_btn.setFixedSize(self.iconsizex, self.iconsizey)
-
-        self.export_all_btn.setToolTip("Export all as ojs files")
-        #self.export_all_btn.clicked.connect(self.export_all)
         self.export_all_btn.setEnabled(False)
+        self.export_all_btn.setToolTip("Extract assets from disc image or folder")
+        self.export_all_btn.clicked.connect(self._open_disc_manager)
         layout.addWidget(self.export_all_btn)
 
-        self.undo_btn = QPushButton()
+        self.undo_btn = QPushButton("Undo")
         self.undo_btn.setFont(self.button_font)
         self.undo_btn.setIcon(ResBioSVGIcons.undo_icon())
-        self.undo_btn.setText("Undo")
         self.undo_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
-        if self.button_display_mode == 'icons':
-            self.undo_btn.setFixedSize(self.iconsizex, self.iconsizey)
-
-        #self.undo_btn.clicked.connect(self._undo_last_action)
         self.undo_btn.setEnabled(False)
         self.undo_btn.setToolTip("Undo last change")
         layout.addWidget(self.undo_btn)
 
-        # Info button
-        self.info_btn = QPushButton("")
-        self.info_btn.setText("")  # CHANGED from "Info"
-        self.info_btn.setIcon(ResBioSVGIcons.info_icon())
-        self.info_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
-        #self.info_btn.setMinimumHeight(30)
-        self.info_btn.setToolTip("Information")
-        self.info_btn.clicked.connect(self._show_about_dialog)
-        self.layout.addWidget(self.info_btn)
-        self.info_btn.setStyleSheet("""
-            QPushButton {
-                font-weight: bold;
-                background-color: #4a4a4a;
-                border: 1px solid #5a5a5a;
-                border-radius: 3px;
-            }
-            QPushButton:hover {
-                background-color: #5a5a5a;
-            }
-        """)
-        self.info_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
-        if self.button_display_mode == 'icons':
-            self.info_btn.setFixedSize(self.iconsizex, self.iconsizey)
+        # Window controls (separator + min/max/close)
+        sep = QFrame()
+        sep.setFrameStyle(QFrame.Shape.VLine)
+        sep.setMaximumWidth(6)
+        layout.addWidget(sep)
 
-        #self.info_btn.clicked.connect(self._show_ojb_info)
-        layout.addWidget(self.info_btn)
-
-        # Properties/Theme button
-        self.properties_btn = QPushButton()
-        self.properties_btn.setFont(self.button_font)
-        self.properties_btn.setIcon(ResBioSVGIcons.properties_icon(self.buticonsizex, icon_color))
-        self.properties_btn.setToolTip("Theme")
-        self.properties_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
-        if self.button_display_mode == 'icons':
-            self.properties_btn.setFixedSize(self.iconsizex, self.iconsizey)
-
-        self.properties_btn.clicked.connect(self._show_settings_dialog)
-        self.properties_btn.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.properties_btn.customContextMenuRequested.connect(self._show_settings_context_menu)
-        layout.addWidget(self.properties_btn)
-
-        # Dock button [D]
-        self.dock_btn = QPushButton("D") #TODO needs to be a SVG icon
-        #self.dock_btn.setFont(self.button_font)
-        self.dock_btn.setMinimumWidth(self.gadiconsizex)
-        self.dock_btn.setMaximumWidth(self.gadiconsizey)
-        if self.dock_display_mode == 'icons':
-            self.dock_btn.setFixedSize(self.iconsizex, self.iconsizey)
-
-        self.dock_btn.setToolTip("Dock")
-        self.dock_btn.setStyleSheet("""
-            QPushButton {
-                font-weight: bold;
-                background-color: #4a4a4a;
-                border: 1px solid #5a5a5a;
-                border-radius: 3px;
-            }
-            QPushButton:hover {
-                background-color: #5a5a5a;
-            }
-        """)
-        self.dock_btn.clicked.connect(self.toggle_dock_mode)
-        layout.addWidget(self.dock_btn)
-
-                # Tear-off button [T] - only in IMG Factory mode
-        if not self.standalone_mode:
-            self.tearoff_btn = QPushButton("T") #TODO needs to be a SVG icon
-            #self.tearoff_btn.setFont(self.button_font)
-            self.tearoff_btn.setMinimumWidth(self.gadiconsizex)
-            self.tearoff_btn.setMaximumWidth(self.gadiconsizey)
-            self.tearoff_btn.clicked.connect(self._toggle_tearoff)
-            self.tearoff_btn.setToolTip("Tearoff window")
-            self.tearoff_btn.setStyleSheet("""
-                QPushButton {
-                    font-weight: bold;
-                    background-color: #4a4a4a;
-                    border: 1px solid #5a5a5a;
-                    border-radius: 3px;
-                }
-                QPushButton:hover {
-                    background-color: #5a5a5a;
-                }
-            """)
-            layout.addWidget(self.tearoff_btn)
-
-        # Window controls
         self.minimize_btn = QPushButton()
         self.minimize_btn.setIcon(ResBioSVGIcons.minimize_icon())
         self.minimize_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
-        if self.button_display_mode == 'icons':
-            self.minimize_btn.setFixedSize(self.iconsizex, self.iconsizey)
-
-        self.minimize_btn.setMinimumWidth(self.gadiconsizex)
         self.minimize_btn.setMaximumWidth(self.gadiconsizey)
         self.minimize_btn.clicked.connect(self.showMinimized)
-        self.minimize_btn.setToolTip("Minimize Window") # click tab to restore
+        self.minimize_btn.setToolTip("Minimize")
         layout.addWidget(self.minimize_btn)
 
         self.maximize_btn = QPushButton()
         self.maximize_btn.setIcon(ResBioSVGIcons.maximize_icon())
         self.maximize_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
-        if self.button_display_mode == 'icons':
-            self.maximize_btn.setFixedSize(self.iconsizex, self.iconsizey)
-
-        self.maximize_btn.setMinimumWidth(self.gadiconsizex)
         self.maximize_btn.setMaximumWidth(self.gadiconsizey)
         self.maximize_btn.clicked.connect(self._toggle_maximize)
-        self.maximize_btn.setToolTip("Maximize/Restore Window")
+        self.maximize_btn.setToolTip("Maximize/Restore")
         layout.addWidget(self.maximize_btn)
 
         self.close_btn = QPushButton()
         self.close_btn.setIcon(ResBioSVGIcons.close_icon())
         self.close_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
-        if self.button_display_mode == 'icons':
-            self.close_btn.setFixedSize(self.iconsizex, self.iconsizey)
-
-        self.close_btn.setMinimumWidth(self.gadiconsizex)
         self.close_btn.setMaximumWidth(self.gadiconsizey)
         self.close_btn.clicked.connect(self.close)
-        self.close_btn.setToolTip("Close Window") # closes tab
+        self.close_btn.setToolTip("Close")
         layout.addWidget(self.close_btn)
+
+        # Keep layout reference on titlebar for drag detection
+        self.layout = QHBoxLayout(self.titlebar)
 
         return self.toolbar
 
@@ -2258,148 +2085,143 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
         main_layout.addWidget(display_group, stretch=1)
 
-        # Information group below
+        # ── Bottom action bar: RE-specific operations ──────────────
         info_group = QGroupBox("")
         info_group.setFont(self.title_font)
         info_layout = QVBoxLayout(info_group)
         info_group.setMaximumHeight(140)
 
-        # === LINE 1: collision name ===
+        # LINE 1: Room name field
         name_layout = QHBoxLayout()
-        name_label = QLabel("Obj Name:")
+        name_label = QLabel("Room:")
         name_label.setFont(self.panel_font)
         name_layout.addWidget(name_label)
 
         self.info_name = QLineEdit()
-        self.info_name.setText("Click to edit...")
+        self.info_name.setPlaceholderText("No room loaded")
         self.info_name.setFont(self.panel_font)
         self.info_name.setReadOnly(True)
-        self.info_name.setStyleSheet("padding: px; border: 1px solid #3a3a3a;")
-        #self.info_name.returnPressed.connect(self._save_surface_name)
-        #self.info_name.editingFinished.connect(self._save_surface_name)
+        self.info_name.setStyleSheet("padding: 2px; border: 1px solid #3a3a3a;")
         self.info_name.mousePressEvent = lambda e: self._enable_name_edit(e, False)
         name_layout.addWidget(self.info_name, stretch=1)
+
+        self.info_format = QLabel("")
+        self.info_format.setFont(self.panel_font)
+        self.info_format.setMinimumWidth(80)
+        name_layout.addWidget(self.info_format)
         info_layout.addLayout(name_layout)
 
-        # === LINES 2 & 3: Adaptive based on display mode ===
-        if self.button_display_mode == 'icons':
-            # MERGED: Single compact line for icon mode
-            merged_line = self._create_merged_icons_line()
-            info_layout.addLayout(merged_line)
-        else:
-            # SEPARATE: Original two-line layout for text/both modes
-            # Line 2: Format controls
-            format_layout = QHBoxLayout()
-            format_layout.setSpacing(self.panelspacing)
+        # LINE 2: View mode + room operations
+        ops_layout = QHBoxLayout()
+        ops_layout.setSpacing(self.panelspacing)
 
-            self.format_combo = QComboBox()
-            self.format_combo.setFont(self.panel_font)
-            self.format_combo.addItems(["ojb", "ojb2", "obj3", "obj4"])
-            #self.format_combo.currentTextChanged.connect(self._change_format)
-            self.format_combo.setEnabled(False)
-            self.format_combo.setMaximumWidth(100)
-            format_layout.addWidget(self.format_combo)
+        # View cycle: Text → Room Map → Floor Plan → Stage Map → ...
+        self.switch_btn = QPushButton("View")
+        self.switch_btn.setFont(self.button_font)
+        self.switch_btn.setIcon(ResBioSVGIcons.view_icon())
+        self.switch_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
+        self.switch_btn.setToolTip("Cycle display view")
+        self.switch_btn.clicked.connect(self._cycle_display_mode)
+        ops_layout.addWidget(self.switch_btn)
 
-            format_layout.addStretch()
+        # Convert room format (RE1 ↔ RE2 ↔ RE3)
+        self.convert_btn = QPushButton("Convert")
+        self.convert_btn.setFont(self.button_font)
+        self.convert_btn.setIcon(ResBioSVGIcons.convert_icon())
+        self.convert_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
+        self.convert_btn.setEnabled(False)
+        self.convert_btn.setToolTip("Convert room between RE1/RE2/RE3 formats")
+        ops_layout.addWidget(self.convert_btn)
 
-            # Switch button
-            self.switch_btn = QPushButton("Switch")
-            self.switch_btn.setFont(self.button_font)
-            self.switch_btn.setIcon(ResBioSVGIcons.flip_vert_icon())
-            self.switch_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
-            #self.switch_btn.clicked.connect(self.switch_surface_view)
-            self.switch_btn.setEnabled(False)
-            self.switch_btn.setToolTip("Cycle: Wireframe → Mesh → Painted → Overlay")
-            format_layout.addWidget(self.switch_btn)
+        # Compress (PAK/PRS)
+        self.compress_btn = QPushButton("Pack")
+        self.compress_btn.setFont(self.button_font)
+        self.compress_btn.setIcon(ResBioSVGIcons.compress_icon())
+        self.compress_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
+        self.compress_btn.setEnabled(False)
+        self.compress_btn.setToolTip("Compress file to PAK/PRS format")
+        ops_layout.addWidget(self.compress_btn)
 
-            # Convert
-            self.convert_btn = QPushButton("Convert")
-            self.convert_btn.setFont(self.button_font)
-            self.convert_btn.setIcon(ResBioSVGIcons.convert_icon())
-            self.convert_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
-            self.convert_btn.setToolTip("Convert Collision format")
-            #self.convert_btn.clicked.connect(self._convert_surface)
-            self.convert_btn.setEnabled(False)
-            format_layout.addWidget(self.convert_btn)
+        # Decompress
+        self.uncompress_btn = QPushButton("Unpack")
+        self.uncompress_btn.setFont(self.button_font)
+        self.uncompress_btn.setIcon(ResBioSVGIcons.uncompress_icon())
+        self.uncompress_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
+        self.uncompress_btn.setEnabled(False)
+        self.uncompress_btn.setToolTip("Decompress PAK/PRS/BSS file")
+        self.uncompress_btn.clicked.connect(self._open_unpack_dialog)
+        ops_layout.addWidget(self.uncompress_btn)
 
-            # Line 3: shadow + Bumpmaps
-            mipbump_layout = QHBoxLayout()
-            mipbump_layout.setSpacing(self.panelspacing)
+        # Import room/texture/model
+        self.import_btn = QPushButton("Import")
+        self.import_btn.setFont(self.button_font)
+        self.import_btn.setIcon(ResBioSVGIcons.import_icon())
+        self.import_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
+        self.import_btn.setEnabled(False)
+        self.import_btn.setToolTip("Import room/texture/model from file")
+        ops_layout.addWidget(self.import_btn)
 
-            self.info_format = QLabel("Example: ")
-            self.info_format.setFont(self.panel_font)
-            self.info_format.setMinimumWidth(100)
-            mipbump_layout.addWidget(self.info_format)
+        # Export room data (JSON / assets)
+        self.export_btn = QPushButton("Export")
+        self.export_btn.setFont(self.button_font)
+        self.export_btn.setIcon(ResBioSVGIcons.export_icon())
+        self.export_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
+        self.export_btn.setEnabled(False)
+        self.export_btn.setToolTip("Export room data to JSON")
+        self.export_btn.clicked.connect(self._export_room_json)
+        ops_layout.addWidget(self.export_btn)
 
-            self.show_shadow_btn = QPushButton("View")
-            self.show_shadow_btn.setFont(self.button_font)
-            self.show_shadow_btn.setIcon(ResBioSVGIcons.view_icon())
-            self.show_shadow_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
-            self.show_shadow_btn.setToolTip("View all levels")
-            #self.show_shadow_btn.clicked.connect(self._open_mipmap_manager)
-            self.show_shadow_btn.setEnabled(False)
-            mipbump_layout.addWidget(self.show_shadow_btn)
+        info_layout.addLayout(ops_layout)
 
-            self.create_shadow_btn = QPushButton("Create")
-            self.create_shadow_btn.setFont(self.button_font)
-            self.create_shadow_btn.setIcon(ResBioSVGIcons.add_icon())
-            self.create_shadow_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
-            self.create_shadow_btn.setToolTip("Generate Shadow Mesh")
-            #self.create_shadow_btn.clicked.connect(self._create_shadow_dialog)
-            self.create_shadow_btn.setEnabled(False)
-            mipbump_layout.addWidget(self.create_shadow_btn)
+        # LINE 3: Item / disc operations
+        item_layout = QHBoxLayout()
+        item_layout.setSpacing(self.panelspacing)
 
-            self.remove_shadow_btn = QPushButton("Remove")
-            self.remove_shadow_btn.setFont(self.button_font)
-            self.remove_shadow_btn.setIcon(ResBioSVGIcons.delete_icon())
-            self.remove_shadow_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
-            self.remove_shadow_btn.setToolTip("Remove Shodow Mesh")
-            #self.remove_shadow_btn.clicked.connect(self._remove_shadow)
-            self.remove_shadow_btn.setEnabled(False)
-            mipbump_layout.addWidget(self.remove_shadow_btn)
+        self.show_shadow_btn = QPushButton("Disc")
+        self.show_shadow_btn.setFont(self.button_font)
+        self.show_shadow_btn.setIcon(ResBioSVGIcons.chip_icon())
+        self.show_shadow_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
+        self.show_shadow_btn.setToolTip("Open disc image manager")
+        self.show_shadow_btn.clicked.connect(self._open_disc_manager)
+        item_layout.addWidget(self.show_shadow_btn)
 
-            mipbump_layout.addSpacing(self.panelspacing)
-            view_layout = QHBoxLayout()
+        self.create_shadow_btn = QPushButton("Add Item")
+        self.create_shadow_btn.setFont(self.button_font)
+        self.create_shadow_btn.setIcon(ResBioSVGIcons.add_icon())
+        self.create_shadow_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
+        self.create_shadow_btn.setEnabled(False)
+        self.create_shadow_btn.setToolTip("Add new item to room")
+        item_layout.addWidget(self.create_shadow_btn)
 
-            self.compress_btn = QPushButton("Compress")
-            self.compress_btn.setFont(self.button_font)
-            self.compress_btn.setIcon(ResBioSVGIcons.compress_icon())
-            self.compress_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
-            self.compress_btn.setToolTip("Compress Collision")
-            #self.compress_btn.clicked.connect(self._compress_surface)
-            self.compress_btn.setEnabled(False)
-            format_layout.addWidget(self.compress_btn)
+        self.remove_shadow_btn = QPushButton("Del Item")
+        self.remove_shadow_btn.setFont(self.button_font)
+        self.remove_shadow_btn.setIcon(ResBioSVGIcons.delete_icon())
+        self.remove_shadow_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
+        self.remove_shadow_btn.setEnabled(False)
+        self.remove_shadow_btn.setToolTip("Remove selected item from room")
+        item_layout.addWidget(self.remove_shadow_btn)
 
-            self.uncompress_btn = QPushButton("Uncompress")
-            self.uncompress_btn.setFont(self.button_font)
-            self.uncompress_btn.setIcon(ResBioSVGIcons.uncompress_icon())
-            self.uncompress_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
-            self.uncompress_btn.setToolTip("Uncompress Collision")
-            #self.uncompress_btn.clicked.connect(self._uncompress_surface)
-            self.uncompress_btn.setEnabled(False)
-            format_layout.addWidget(self.uncompress_btn)
+        item_layout.addStretch()
 
-            self.import_btn = QPushButton("Import")
-            self.import_btn.setFont(self.button_font)
-            self.import_btn.setIcon(ResBioSVGIcons.import_icon())
-            self.import_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
-            self.import_btn.setToolTip("Import col, cst, 3ds files")
-            #self.import_btn.clicked.connect(self._import_selected)
-            self.import_btn.setEnabled(False)
-            format_layout.addWidget(self.import_btn)
+        # TIM texture quick-open
+        self.open_tim_btn = QPushButton("TIM")
+        self.open_tim_btn.setFont(self.button_font)
+        self.open_tim_btn.setIcon(ResBioSVGIcons.paint_icon())
+        self.open_tim_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
+        self.open_tim_btn.setToolTip("Open TIM texture file")
+        self.open_tim_btn.clicked.connect(self._open_tim_file)
+        item_layout.addWidget(self.open_tim_btn)
 
-            self.export_btn = QPushButton("Export")
-            self.export_btn.setFont(self.button_font)
-            self.export_btn.setIcon(ResBioSVGIcons.export_icon())
-            self.export_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
-            self.export_btn.setToolTip("Export col, cst, 3ds files")
-            #self.export_btn.clicked.connect(self.export_selected)
-            self.export_btn.setEnabled(False)
-            format_layout.addWidget(self.export_btn)
+        # Unpack quick-open
+        self.unpack_btn = QPushButton("Unpack")
+        self.unpack_btn.setFont(self.button_font)
+        self.unpack_btn.setIcon(ResBioSVGIcons.package_icon())
+        self.unpack_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
+        self.unpack_btn.setToolTip("Unpack RE game files")
+        self.unpack_btn.clicked.connect(self._open_unpack_dialog)
+        item_layout.addWidget(self.unpack_btn)
 
-            info_layout.addLayout(format_layout)
-            info_layout.addLayout(view_layout)
-            info_layout.addLayout(mipbump_layout)
+        info_layout.addLayout(item_layout)
 
         main_layout.addWidget(info_group, stretch=0)
         return panel
@@ -4980,6 +4802,36 @@ class ResBioEvilWorkshop(QWidget): #ver 1
                 QMessageBox.information(self, "Exported", f"Saved to:\n{path}")
             except Exception as e:
                 QMessageBox.critical(self, "Export Error", str(e))
+
+    def _show_app_menu(self): #vers 1
+        """Pop-up application menu from the Menu button."""
+        from PyQt6.QtWidgets import QMenu
+        menu = QMenu(self)
+        menu.addAction("Open RDT...",         self._open_file)
+        menu.addAction("Open Stage Folder...", self._browse_stage_folder)
+        menu.addAction("Open Disc Image...",   self._open_disc_manager)
+        menu.addSeparator()
+        menu.addAction("Save",     self._save_file)
+        menu.addAction("Save As",  self._save_file_as)
+        menu.addAction("Export JSON...", self._export_room_json)
+        menu.addSeparator()
+        menu.addAction("Settings", self._show_workshop_settings)
+        menu.addAction("About",    self._show_about_dialog)
+        menu.addSeparator()
+        menu.addAction("Quit",     self.close)
+        btn = self.menu_btn
+        menu.exec(btn.mapToGlobal(btn.rect().bottomLeft()))
+
+    def _cycle_display_mode(self): #vers 1
+        """Cycle the display stack to the next view mode."""
+        modes = ["Text", "Room Map", "Texture", "Stage Map",
+                 "Floor Plan", "Model", "Scripts", "Info"]
+        current = self.display_mode_combo.currentText()
+        try:
+            idx = (modes.index(current) + 1) % len(modes)
+        except ValueError:
+            idx = 0
+        self.display_mode_combo.setCurrentText(modes[idx])
 
     def _open_disc_manager(self): #vers 1
         """Open the disc image manager dialog."""
