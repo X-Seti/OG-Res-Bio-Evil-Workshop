@@ -153,17 +153,35 @@ def scan_game_folder(folder_path: str) -> GameFolder: #vers 1
     gf.version = detect_game_version(folder_path)
 
     ext_map = {
+        # Room files
         '.RDT': 'rdt_files',
+        # Textures / backgrounds
         '.TIM': 'texture_files',
         '.PAK': 'texture_files',
         '.ADT': 'texture_files',
         '.BSS': 'texture_files',
+        '.SLD': 'texture_files',
+        '.PIX': 'texture_files',
+        '.RGB': 'texture_files',
+        # 3D models
         '.EMD': 'model_files',
         '.PLD': 'model_files',
         '.EDD': 'model_files',
+        '.IVM': 'model_files',
+        '.DOR': 'model_files',
+        '.EMW': 'model_files',
+        '.TMD': 'model_files',
+        # Audio
+        '.VAG': 'archive_files',
+        '.VB':  'archive_files',
+        '.HED': 'archive_files',
+        '.HSB': 'archive_files',
+        '.XAS': 'archive_files',
+        # Video
+        '.STR': 'archive_files',
+        # Archives/data
         '.DAT': 'archive_files',
         '.BIN': 'archive_files',
-        '.SLD': 'texture_files',
     }
 
     rofs_exts = {'.DAT'}

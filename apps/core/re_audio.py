@@ -199,6 +199,14 @@ def to_wav_file(path: str, output_path: Optional[str] = None) -> Optional[str]: 
             pcm, sample_rate, channels = decode_vag(path)
         elif fmt == 'snd':
             pcm, sample_rate, channels = decode_snd(path)
+        elif fmt == 'vb':
+            # Look for matching .HED file
+            hed = os.path.splitext(path)[0] + '.HED'
+            if not os.path.exists(hed):
+                hed = os.path.splitext(path)[0] + '.hed'
+            pcm, sample_rate, channels = decode_vb(path, hed)
+        elif fmt == 'hsb':
+            pcm, sample_rate, channels = decode_hsb(path)
         else:
             return None
 
@@ -263,9 +271,9 @@ def get_audio_info(path: str) -> AudioInfo: #vers 1
     return info
 
 
-def scan_audio_files(folder: str) -> List[str]: #vers 1
+def scan_audio_files(folder: str) -> List[str]: #vers 2
     """Scan a folder for supported audio files. Returns sorted list of paths."""
-    supported = {'.VAG', '.WAV', '.SND', '.SAB'}
+    supported = {'.VAG', '.WAV', '.SND', '.SAB', '.VB', '.HSB'}
     found = []
     try:
         for fname in sorted(os.listdir(folder)):
@@ -274,3 +282,50 @@ def scan_audio_files(folder: str) -> List[str]: #vers 1
     except OSError:
         pass
     return found
+
+
+def decode_vb(path: str, hed_path: str = '') -> Tuple[bytes, int, int]: #vers 1
+    """Decode a Biohazard .VB voice bank file.
+    VB files contain raw PS1 ADPCM without VAGp headers.
+    HED file (if provided) contains offsets to each sample.
+    Returns first sample decoded as PCM.
+    """
+    try:
+        with open(path, 'rb') as f:
+            data = f.read()
+
+        # Try to read offsets from HED if available
+        offsets = [0]
+        if hed_path and os.path.exists(hed_path):
+            with open(hed_path, 'rb') as f:
+                hed = f.read()
+            # HED is a table of uint32 offsets
+            num = len(hed) // 4
+            offsets = [struct.unpack_from('<I', hed, i*4)[0]
+                       for i in range(num) if struct.unpack_from('<I', hed, i*4)[0] < len(data)]
+
+        # Decode first sample from offset 0
+        pcm = _decode_adpcm(data[offsets[0]:])
+        return pcm, 22050, 1
+    except Exception as e:
+        return b'', 22050, 1
+
+
+def decode_hsb(path: str) -> Tuple[bytes, int, int]: #vers 1
+    """Decode a Biohazard .HSB sound bank.
+    HSB starts with a small header, then contains packed ADPCM samples.
+    Scan for VAGp headers first, then fall back to raw ADPCM.
+    """
+    # Try VAG embedded first
+    offsets = find_vag_in_file(path)
+    if offsets:
+        return decode_vag(path, offsets[0])
+    # Fall back to raw ADPCM from offset 0x20 (common HSB header size)
+    try:
+        with open(path, 'rb') as f:
+            f.seek(0x20)
+            data = f.read()
+        pcm = _decode_adpcm(data)
+        return pcm, 22050, 1
+    except Exception:
+        return b'', 22050, 1

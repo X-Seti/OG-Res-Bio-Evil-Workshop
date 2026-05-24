@@ -52,18 +52,21 @@ class BackgroundImage: #vers 1
         return os.path.basename(self.path)
 
 
-def _room_stem_from_rdt(rdt_path: str) -> str: #vers 1
-    """Extract the room stem from an RDT filename.
-    ROOM000.RDT  -> ROOM000
-    ROOM11C1.RDT -> ROOM11C  (strip trailing scenario digit)
-    room1000.rdt -> ROOM100
+def _room_stem_from_rdt(rdt_path: str) -> str: #vers 2
+    """Extract the room stem for finding BSS/PAK background files.
+    
+    RE2 disc structure (confirmed from snapshot):
+      ROOM11C0.RDT + ROOM11C1.RDT -> ROOM11C.BSS  (one BSS per room)
+    RE1 PC:
+      ROOM000.RDT -> ROOM0000.PAK, ROOM0001.PAK (one PAK per camera)
+
+    Strip the trailing scenario digit (0/1) for RE2 to match BSS name.
     """
     name = os.path.splitext(os.path.basename(rdt_path))[0].upper()
     if not name.startswith('ROOM'):
         return name
-    digits = name[4:]  # everything after "ROOM"
-    # RE2/RE3: trailing 0 or 1 is scenario selector, not part of room ID
-    # If last char is 0 or 1 and stem is 4+ chars, strip it
+    digits = name[4:]
+    # Strip trailing scenario digit for RE2 (4+ char stem ending in 0 or 1)
     if len(digits) >= 4 and digits[-1] in ('0', '1'):
         digits = digits[:-1]
     return 'ROOM' + digits

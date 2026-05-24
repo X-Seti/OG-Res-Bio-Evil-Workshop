@@ -60,38 +60,95 @@ from apps.core.disc_image import (
 ##class DiscManagerDialog:
 
 
-# File type colours
+# File type colours (based on real Biohazard disc snapshot)
 COLORS = {
-    '.RDT': QColor(100, 180, 255),
-    '.TIM': QColor(200, 160, 80),
-    '.EMD': QColor(150, 220, 150),
-    '.PLD': QColor(130, 200, 130),
-    '.PAK': QColor(200, 130, 200),
-    '.BSS': QColor(180, 180, 100),
-    '.ADT': QColor(200, 120, 100),
-    '.VAG': QColor(100, 200, 200),
-    '.WAV': QColor(100, 200, 200),
-    '.SND': QColor(80, 180, 180),
+    # Room data
+    '.RDT': QColor(100, 180, 255),   # room file - blue
+    '.BSS': QColor(160, 200, 120),   # background - green
+    # Textures
+    '.TIM': QColor(200, 160, 80),    # PSX texture - orange
+    '.PIX': QColor(180, 140, 80),    # raw VRAM pixel - orange dim
+    '.RGB': QColor(160, 120, 80),    # raw RGB - brown
+    '.PAK': QColor(200, 130, 200),   # PC background - purple
+    '.ADT': QColor(180, 110, 180),   # RE2 PC bg - purple dim
+    # Models
+    '.EMD': QColor(150, 220, 150),   # enemy model - green
+    '.PLD': QColor(130, 200, 130),   # player model - green dim
+    '.IVM': QColor(120, 200, 120),   # item model - green dim
+    '.DOR': QColor(110, 180, 110),   # door model - green dim
+    '.EMW': QColor(100, 170, 100),   # weapon attachment
+    '.TMD': QColor(90,  160, 90),    # PS1 TMD model
+    # Audio
+    '.VAG': QColor(100, 200, 200),   # PS1 ADPCM
+    '.WAV': QColor(100, 200, 200),   # PC audio
+    '.SND': QColor(80,  180, 180),   # sound container
+    '.HSB': QColor(80,  190, 190),   # biohazard sound bank
+    '.VB':  QColor(70,  170, 170),   # voice bank (raw ADPCM)
+    '.HED': QColor(60,  150, 150),   # sound index header
+    '.XAS': QColor(60,  160, 160),   # XA audio stream
+    # Video
+    '.STR': QColor(200, 100, 100),   # FMV MDEC stream - red
+    # Data
     '.BIN': QColor(160, 160, 160),
     '.DAT': QColor(160, 160, 160),
+    '.ETM': QColor(150, 150, 170),   # effect texture
+    '.ESP': QColor(150, 150, 170),   # effect sprite
 }
 
-# RE-relevant extensions
-RE_EXTENSIONS = {'.RDT', '.TIM', '.EMD', '.PAK', '.BSS', '.ADT',
-                 '.PLD', '.EDD', '.BIN', '.DAT', '.SLD', '.PRS',
-                 '.VAG', '.WAV', '.SND'}
+# RE-relevant extensions (all game assets)
+RE_EXTENSIONS = {
+    '.RDT', '.TIM', '.EMD', '.PAK', '.BSS', '.ADT',
+    '.PLD', '.EDD', '.BIN', '.DAT', '.SLD', '.PRS',
+    '.VAG', '.WAV', '.SND', '.HSB', '.VB', '.HED',
+    '.IVM', '.DOR', '.EMW', '.TMD', '.PIX', '.RGB',
+    '.XAS', '.STR', '.ETM', '.ESP', '.PTC',
+}
 
-# What each extension opens in
+# What each extension can be opened in directly
 VIEWERS = {
     '.RDT': 'room',
     '.TIM': 'texture',
+    '.PIX': 'texture',   # raw VRAM - try as TIM
+    '.PAK': 'texture',
+    '.BSS': 'texture',
     '.EMD': 'model',
     '.PLD': 'model',
+    '.IVM': 'model',
+    '.TMD': 'model',
+    '.DOR': 'model',
+    '.EMW': 'model',
     '.VAG': 'audio',
     '.WAV': 'audio',
     '.SND': 'audio',
-    '.PAK': 'texture',
-    '.BSS': 'texture',
+    '.VB':  'audio',
+    '.HSB': 'audio',
+}
+
+# Human-readable descriptions for status bar
+FILE_DESCRIPTIONS = {
+    '.RDT': 'Room Data Table',
+    '.BSS': 'Background (PS1 MDEC)',
+    '.TIM': 'PS1 Texture',
+    '.PIX': 'Raw VRAM Pixels',
+    '.RGB': 'Raw RGB Image',
+    '.EMD': 'Enemy Model',
+    '.PLD': 'Player Model',
+    '.IVM': 'Item Model',
+    '.DOR': 'Door/Obstacle Model',
+    '.EMW': 'Enemy Weapon Model',
+    '.TMD': 'PS1 TMD Model',
+    '.PAK': 'Packed Background (PC)',
+    '.BSS': 'Background Screen (PS1)',
+    '.ADT': 'Background (RE2 PC)',
+    '.VAG': 'PS1 ADPCM Audio',
+    '.VB':  'Voice Bank (ADPCM)',
+    '.HED': 'Sound Bank Index',
+    '.HSB': 'Biohazard Sound Bank',
+    '.XAS': 'XA Audio Stream (BGM)',
+    '.STR': 'FMV Video Stream',
+    '.ETM': 'Effect Texture Map',
+    '.ESP': 'Effect Sprite',
+    '.PTC': 'Patch/Config Data',
 }
 
 
