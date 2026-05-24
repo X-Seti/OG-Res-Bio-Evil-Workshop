@@ -1849,9 +1849,11 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         # Keep references alive
         self._stage_loader_refs = [(thread, loader)]
 
-    def _on_left_file_selected(self, item): #vers 1
-        """Highlight file in list without loading."""
-        pass
+    def _on_left_file_selected(self, item): #vers 2
+        """Single click: load the RDT file."""
+        file_path = item.data(Qt.ItemDataRole.UserRole)
+        if file_path:
+            self._load_rdt(file_path)
 
     def _on_floor_plan_room_clicked(self, room_id: str): #vers 1
         """Click on floor plan room area - load it and stay on floor plan."""
@@ -1894,10 +1896,7 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         if file_path:
             self._load_rdt(file_path)
 
-        self.col_list_widget = QListWidget()
-        self.col_list_widget.setAlternatingRowColors(True)
-        self.col_list_widget.itemClicked.connect(self._on_col_selected)
-        layout.addWidget(self.col_list_widget)
+        # (col_list_widget created in _create_left_panel)
         return panel
 
     def _create_middle_panel(self): #ver 2

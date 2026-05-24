@@ -88,7 +88,6 @@ def load_rdt_file(main_window: 'ResBioEvilWorkshop', file_path: str) -> Optional
     # Load audio file for this room if player exists
     if hasattr(main_window, 'audio_player') and main_window.audio_player:
         from apps.core.re_audio import scan_audio_files
-        import os
         audio_files = scan_audio_files(os.path.dirname(rdt.file_path))
         if audio_files:
             main_window.audio_player.load_file(audio_files[0])
