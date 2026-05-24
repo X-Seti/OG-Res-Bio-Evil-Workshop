@@ -3910,9 +3910,14 @@ class ResBioEvilWorkshop(QWidget): #ver 1
                     self._recent_files.add_recent_file(
                         file_path, rdt.room_id, game)
                 if not rdt.valid and rdt.parse_errors:
-                    errors = '\n'.join(rdt.parse_errors)
-                    QMessageBox.warning(self, "Parse Warnings",
-                        f"File loaded with errors:\n{errors}")
+                    # Skip dialog for known dummy/placeholder rooms (< 16 bytes)
+                    if rdt.file_size > 16:
+                        errors = '\n'.join(rdt.parse_errors)
+                        QMessageBox.warning(self, "Parse Warnings",
+                            f"File loaded with errors:\n{errors}")
+                    else:
+                        img_debugger.debug(f"Skipped dummy room: {rdt.room_id} ({rdt.file_size}B)")
+                        return
         except Exception as e:
             img_debugger.error(f"RDT load error: {e}")
             QMessageBox.critical(self, "Load Error", f"Failed to load RDT:\n{str(e)}")

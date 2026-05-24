@@ -155,54 +155,35 @@ def load_background_pak(path: str, camera_index: int = 0) -> BackgroundImage: #v
 
 
 def load_background_bss(path: str, camera_index: int = 0,
-                        game: str = 're1') -> BackgroundImage: #vers 1
-    """Load a RE1/RE2 PS1 BSS background file.
-    BSS is raw MDEC-compressed video frame. We extract the TIM mask portion.
-    For full MDEC decoding a hardware decoder is needed - we extract what we can.
-    game: 're1', 're2', 're3'
-    """
+                        game: str = 're1') -> BackgroundImage: #vers 2
+    """Load a RE1/RE2/RE3 PS1 BSS background file via MDEC decoder."""
     bg = BackgroundImage(path=path, camera_index=camera_index,
                          width=0, height=0, rgba_data=b'')
     try:
+        # Try MDEC decoder first (pure Python port of reevengi-tools)
+        from apps.core.mdec_decoder import decode_bss_background
+        result = decode_bss_background(path)
+        if result:
+            rgba, w, h = result
+            bg.rgba_data = rgba
+            bg.width     = w
+            bg.height    = h
+            bg.valid     = True
+            return bg
+
+        # Fallback: scan for embedded TIM header
         with open(path, 'rb') as f:
             raw = f.read()
-
-        # BSS file: starts with MDEC video data, TIM mask follows
-        # For RE1 BSS the TIM is embedded after the MDEC frame
-        # Try to find TIM magic (0x10 0x00 0x00 0x00)
         TIM_MAGIC = b'\x10\x00\x00\x00'
         tim_offset = raw.find(TIM_MAGIC)
-
         if tim_offset >= 0:
-            tim_bytes = raw[tim_offset:]
-            tim = _parse_tim_from_bytes(tim_bytes, path)
+            tim = _parse_tim_from_bytes(raw[tim_offset:], path)
             if tim.valid:
-                bg.width     = tim.width
-                bg.height    = tim.height
-                bg.rgba_data = tim.rgba_data
-                bg.valid     = True
+                bg.width = tim.width; bg.height = tim.height
+                bg.rgba_data = tim.rgba_data; bg.valid = True
                 return bg
 
-        # No TIM found in raw - try BSS decompression
-        try:
-            if game == 're3':
-                decompressed = unpack_bss_re3(raw)
-            else:
-                decompressed = unpack_bss_re2(raw)
-
-            tim_offset2 = decompressed.find(TIM_MAGIC)
-            if tim_offset2 >= 0:
-                tim = _parse_tim_from_bytes(decompressed[tim_offset2:], path)
-                if tim.valid:
-                    bg.width     = tim.width
-                    bg.height    = tim.height
-                    bg.rgba_data = tim.rgba_data
-                    bg.valid     = True
-                    return bg
-        except Exception:
-            pass
-
-        bg.error = "No TIM data found in BSS file (MDEC-only, decoder not implemented)"
+        bg.error = "BSS: MDEC decode failed and no TIM fallback found"
 
     except Exception as e:
         bg.error = str(e)
