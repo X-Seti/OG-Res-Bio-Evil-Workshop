@@ -118,21 +118,45 @@ class DiscManagerDialog(QDialog): #vers 1
         layout = QVBoxLayout(w)
         layout.setSpacing(4)
 
-        # Disc file row
-        disc_row = QHBoxLayout()
-        disc_row.addWidget(QLabel("Disc image:"))
+        # Folder picker row
+        folder_row = QHBoxLayout()
+        folder_row.addWidget(QLabel("Folder:"))
+        self.folder_edit = QLineEdit()
+        self.folder_edit.setPlaceholderText("Folder containing disc images (.img .iso .bin .cue .ccd .7z .rar .zip)")
+        folder_row.addWidget(self.folder_edit, stretch=1)
+        browse_folder_btn = QPushButton("Browse...")
+        browse_folder_btn.setMaximumWidth(80)
+        browse_folder_btn.clicked.connect(self._browse_folder)
+        folder_row.addWidget(browse_folder_btn)
+        layout.addLayout(folder_row)
+
+        # Disc image list
+        disc_list_label = QLabel("Disc images found:")
+        disc_list_label.setFont(QFont("Courier New", 8))
+        layout.addWidget(disc_list_label)
+
+        self.disc_list = QTreeWidget()
+        self.disc_list.setColumnCount(3)
+        self.disc_list.setHeaderLabels(["File", "Format", "Size"])
+        self.disc_list.setMaximumHeight(120)
+        self.disc_list.setAlternatingRowColors(True)
+        self.disc_list.setFont(QFont("Courier New", 8))
+        self.disc_list.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.disc_list.header().resizeSection(1, 120)
+        self.disc_list.header().resizeSection(2, 80)
+        self.disc_list.itemDoubleClicked.connect(self._on_disc_double_clicked)
+        layout.addWidget(self.disc_list)
+
+        # Open selected row
+        open_row = QHBoxLayout()
         self.disc_edit = QLineEdit()
-        self.disc_edit.setPlaceholderText(".iso / .bin / .ccd / .img / .7z / .rar / .zip")
-        disc_row.addWidget(self.disc_edit, stretch=1)
-        browse_disc_btn = QPushButton("Browse...")
-        browse_disc_btn.setMaximumWidth(80)
-        browse_disc_btn.clicked.connect(self._browse_disc)
-        disc_row.addWidget(browse_disc_btn)
+        self.disc_edit.setPlaceholderText("Selected disc image path")
+        open_row.addWidget(self.disc_edit, stretch=1)
         self.open_btn = QPushButton("Open")
         self.open_btn.setMaximumWidth(60)
         self.open_btn.clicked.connect(self._open_disc)
-        disc_row.addWidget(self.open_btn)
-        layout.addLayout(disc_row)
+        open_row.addWidget(self.open_btn)
+        layout.addLayout(open_row)
 
         # Format label
         self.fmt_label = QLabel("Format: —")

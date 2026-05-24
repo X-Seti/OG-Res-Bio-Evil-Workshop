@@ -85,44 +85,61 @@ def _read_sector_data(raw: bytes) -> bytes: #vers 1
     return raw[:_SECTOR_DATA]
 
 
-class RawSectorReader: #vers 1
-    """Read a raw-sector CD image (BIN or IMG) as a seekable byte stream."""
+class RawSectorReader: #vers 2
+    """Read a raw-sector CD image (BIN or IMG).
+    Handles PS1 Mode2 Form1, Mode1, and 150-sector pregap offset.
+    Scans for the ISO9660 PVD to find the true track start.
+    """
+
+    _PVD_SIG = b'\x01CD001'
 
     def __init__(self, path: str): #vers 1
         self._f = open(path, 'rb')
         self._f.seek(0, 2)
         raw_size = self._f.tell()
         self._num_sectors = raw_size // _SECTOR_RAW
-        self._pos = 0   # logical byte position in 2048-byte data space
+        self._track_offset = self._find_track_offset()
+
+    def _find_track_offset(self) -> int: #vers 1
+        """Scan for ISO9660 PVD to find where the data track starts.
+        Returns sector offset (track_start = pvd_sector - 16).
+        PS1 discs often have a 150-sector pregap before the data track.
+        """
+        # Scan first 300 sectors for PVD signature
+        for lba in range(min(self._num_sectors, 300)):
+            payload = self._read_raw_sector(lba)
+            if payload[:5] == self._PVD_SIG:
+                # PVD is always at LBA 16 from track start
+                offset = max(0, lba - 16)
+                return offset
+        return 0  # no offset found, assume starts at 0
+
+    def _read_raw_sector(self, physical_lba: int) -> bytes: #vers 1
+        """Read and strip one raw sector at physical_lba."""
+        self._f.seek(physical_lba * _SECTOR_RAW)
+        raw = self._f.read(_SECTOR_RAW)
+        if len(raw) < _SECTOR_RAW:
+            return bytes(_SECTOR_DATA)
+        return _read_sector_data(raw)
 
     def close(self): #vers 1
         self._f.close()
 
     def _sector_at_lba(self, lba: int) -> bytes: #vers 1
-        self._f.seek(lba * _SECTOR_RAW)
-        raw = self._f.read(_SECTOR_RAW)
-        return _read_sector_data(raw)
+        """Read logical LBA (relative to track start) as 2048-byte data."""
+        return self._read_raw_sector(self._track_offset + lba)
 
     def read_lba(self, lba: int, count: int) -> bytes: #vers 1
-        """Read `count` sectors starting at LBA, return data bytes."""
         out = bytearray()
         for i in range(count):
             out += self._sector_at_lba(lba + i)
         return bytes(out)
 
-    def read_bytes(self, byte_offset: int, length: int) -> bytes: #vers 1
-        """Read `length` bytes at logical byte offset (data-space)."""
-        lba_start = byte_offset // _SECTOR_DATA
-        off_in_sector = byte_offset % _SECTOR_DATA
-        sectors_needed = (off_in_sector + length + _SECTOR_DATA - 1) // _SECTOR_DATA
-        raw = self.read_lba(lba_start, sectors_needed)
-        return raw[off_in_sector:off_in_sector + length]
-
     def as_iso_bytes(self) -> bytes: #vers 1
-        """Extract full data track as plain 2048-byte/sector byte stream.
-        Used to feed into pycdlib."""
+        """Return complete ISO data track as 2048-byte/sector stream for pycdlib."""
         out = bytearray()
-        for lba in range(self._num_sectors):
+        iso_sectors = self._num_sectors - self._track_offset
+        for lba in range(iso_sectors):
             out += self._sector_at_lba(lba)
         return bytes(out)
 
@@ -253,16 +270,20 @@ class BinCueImage(DiscImage): #vers 1
         base = os.path.splitext(cue_path)[0]
         return base + '.bin'
 
-    def _mount(self): #vers 1
+    def _mount(self): #vers 2
         """Convert raw sectors to ISO bytes and mount via pycdlib."""
         if not os.path.exists(self._bin_path):
             return
         self._reader = RawSectorReader(self._bin_path)
+        print(f"BIN/CUE: {self._reader._num_sectors} sectors, "
+              f"track offset={self._reader._track_offset}")
         try:
             import pycdlib
             iso_bytes = self._reader.as_iso_bytes()
+            print(f"BIN/CUE: ISO stream {len(iso_bytes)} bytes")
             self._pyiso = pycdlib.PyCdlib()
             self._pyiso.open_fp(io.BytesIO(iso_bytes))
+            print(f"BIN/CUE: mounted OK")
         except Exception as e:
             print(f"BIN/CUE mount error: {e}")
 
@@ -316,18 +337,29 @@ class CcdImgImage(DiscImage): #vers 1
         self._mount()
         self._scan()
 
-    def _mount(self): #vers 1
+    def _mount(self): #vers 2
         if not os.path.exists(self._img_path):
             print(f"CCD/IMG: no IMG file found at {self._img_path}")
             return
         self._reader = RawSectorReader(self._img_path)
+        print(f"CCD/IMG: {self._reader._num_sectors} sectors, "
+              f"track offset={self._reader._track_offset}")
         try:
             import pycdlib
             iso_bytes = self._reader.as_iso_bytes()
+            print(f"CCD/IMG: ISO stream {len(iso_bytes)} bytes")
             self._pyiso = pycdlib.PyCdlib()
             self._pyiso.open_fp(io.BytesIO(iso_bytes))
+            print(f"CCD/IMG: mounted OK")
         except Exception as e:
             print(f"CCD/IMG mount error: {e}")
+            # Try Joliet/Rock Ridge fallback
+            try:
+                import pycdlib
+                self._pyiso = pycdlib.PyCdlib()
+                self._pyiso.open_fp(io.BytesIO(iso_bytes))
+            except Exception as e2:
+                print(f"CCD/IMG mount fallback also failed: {e2}")
 
     def _scan(self): #vers 1
         self._files = []
