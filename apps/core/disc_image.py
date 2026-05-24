@@ -25,6 +25,14 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Tuple, Dict, Iterator
 from enum import Enum
 
+# Check pycdlib available - needed for ISO/BIN/CUE/CCD mounting
+try:
+    import pycdlib as _pycdlib_check
+    _PYCDLIB_AVAILABLE = True
+except ImportError:
+    _PYCDLIB_AVAILABLE = False
+    print("WARNING: pycdlib not installed. Install with: pip install pycdlib --break-system-packages")
+
 ##Methods list -
 # detect_format
 # open_disc
@@ -200,6 +208,8 @@ class ISOImage(DiscImage): #vers 1
         super().__init__()
         self.format = DiscFormat.ISO
         self.path = path
+        if not _PYCDLIB_AVAILABLE:
+            raise ImportError("pycdlib required: pip install pycdlib --break-system-packages")
         import pycdlib
         self._iso = pycdlib.PyCdlib()
         self._iso.open(path)

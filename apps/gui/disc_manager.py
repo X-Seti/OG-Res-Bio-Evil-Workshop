@@ -275,7 +275,75 @@ class DiscManagerDialog(QDialog): #vers 1
 
     # --- Disc opening ---
 
+    def _browse_folder(self): #vers 1
+        """Browse for a folder, then scan it for disc images."""
+        folder = QFileDialog.getExistingDirectory(self, "Select Folder with Disc Images")
+        if folder:
+            self.folder_edit.setText(folder)
+            if not self.out_edit.text():
+                self.out_edit.setText(os.path.join(folder, "extracted"))
+            self._scan_folder_for_discs(folder)
+
+    def _scan_folder_for_discs(self, folder: str): #vers 1
+        """Scan folder for disc image files and populate the list."""
+        from apps.core.disc_image import detect_format, DiscFormat
+        self.disc_list.clear()
+        exts = {'.ISO', '.BIN', '.CUE', '.CCD', '.IMG', '.7Z', '.RAR', '.ZIP'}
+        found = []
+        for root, dirs, files in os.walk(folder):
+            depth = root[len(folder):].count(os.sep)
+            if depth > 2:
+                dirs.clear()
+                continue
+            for fname in sorted(files):
+                ext = os.path.splitext(fname)[1].upper()
+                if ext in exts:
+                    found.append(os.path.join(root, fname))
+
+        # Filter: skip .sub/.sbi, skip .img if .ccd exists, skip multi-track bins
+        filtered = []
+        for path in found:
+            ext = os.path.splitext(path)[1].upper()
+            if ext in ('.SUB', '.SBI'):
+                continue
+            if ext == '.IMG':
+                ccd = os.path.splitext(path)[0] + '.ccd'
+                if os.path.exists(ccd) or os.path.exists(ccd.upper()):
+                    continue
+            if ext == '.BIN':
+                fname_up = os.path.basename(path).upper()
+                if any(f'TRACK {i}' in fname_up or f'TRACK{i}' in fname_up
+                       for i in range(2, 20)):
+                    continue
+            filtered.append(path)
+
+        for path in filtered:
+            fmt = detect_format(path)
+            size = os.path.getsize(path)
+            size_str = (f"{size/1024/1024:.0f} MB" if size > 1024*1024
+                        else f"{size//1024} KB")
+            rel = os.path.relpath(path, folder)
+            row = QTreeWidgetItem([rel, fmt.value, size_str])
+            row.setData(0, Qt.ItemDataRole.UserRole, path)
+            self.disc_list.addTopLevelItem(row)
+
+        count = self.disc_list.topLevelItemCount()
+        self._log(f"Found {count} disc image{'s' if count != 1 else ''} in {folder}")
+
+        if count == 1:
+            item = self.disc_list.topLevelItem(0)
+            self.disc_list.setCurrentItem(item)
+            self.disc_edit.setText(item.data(0, Qt.ItemDataRole.UserRole))
+
+    def _on_disc_double_clicked(self, item): #vers 1
+        """Double-click disc in list -> select and open."""
+        path = item.data(0, Qt.ItemDataRole.UserRole)
+        if path:
+            self.disc_edit.setText(path)
+            self._open_disc()
+
     def _browse_disc(self): #vers 1
+        """Fallback: open single disc image directly."""
         path, _ = QFileDialog.getOpenFileName(
             self, "Open Disc Image", "",
             "Disc Images (*.iso *.bin *.cue *.ccd *.img *.7z *.rar *.zip);;All Files (*)"

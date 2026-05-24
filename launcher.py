@@ -39,9 +39,28 @@ def _make_app_icon():
         return QIcon()
 
 
+def _check_dependencies():
+    """Check required packages and warn about missing ones."""
+    missing = []
+    for pkg, install in [
+        ('pycdlib',  'pycdlib'),
+        ('py7zr',    'py7zr'),
+        ('rarfile',  'rarfile'),
+    ]:
+        try:
+            __import__(pkg)
+        except ImportError:
+            missing.append(install)
+
+    if missing:
+        print(f"WARNING: Missing optional packages: {', '.join(missing)}")
+        print(f"Install with: pip install {' '.join(missing)} --break-system-packages")
+
+
 if __name__ == "__main__":
     try:
         print("ResBio Evil Workshop Starting...")
+        _check_dependencies()
         from PyQt6.QtWidgets import QApplication
         from apps.components.ResBio_Evil_Workshop.ResBio_Evil_Workshop import ResBioEvilWorkshop
 

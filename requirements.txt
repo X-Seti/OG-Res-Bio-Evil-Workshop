@@ -1,4 +1,10 @@
+# ResBio-Evil-Workshop dependencies
+# Install with: pip install -r requirements.txt --break-system-packages
+
 PyQt6>=6.4.0
 pycdlib>=1.14.0
 py7zr>=0.20.0
 rarfile>=4.0
+
+# Optional: needed for RAR extraction (system package)
+# sudo apt install unar
