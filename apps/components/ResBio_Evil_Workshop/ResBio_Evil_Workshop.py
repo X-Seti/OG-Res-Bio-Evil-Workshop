@@ -4892,8 +4892,25 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         menu.addAction("Open Disc Image...",    self._open_disc_manager)
         menu.addSeparator()
 
+        # Recent discs submenu
+        disc_menu = menu.addMenu("Recent Discs")
+        rf = self._recent_files
+        recent_discs = rf.get_recent_discs() if rf else []
+        if recent_discs:
+            for path in recent_discs:
+                name = os.path.basename(path)
+                act = disc_menu.addAction(f"{name}")
+                act.setToolTip(path)
+                act.triggered.connect(lambda checked, p=path: (
+                    self._open_disc_manager(),
+                    self._disc_manager._open_recent_disc(p, os.path.dirname(p))
+                    if hasattr(self, '_disc_manager') and self._disc_manager else None
+                ))
+        else:
+            disc_menu.addAction("(no recent discs)").setEnabled(False)
+
         # Recent files submenu
-        recent_menu = menu.addMenu("Recent Files")
+        recent_menu = menu.addMenu("Recent Rooms")
         rf = self._recent_files
         recent = rf.get_recent_files() if rf else []
         if recent:

@@ -219,6 +219,11 @@ class DiscManagerDialog(QDialog): #vers 2
         browse_btn.setMaximumWidth(80)
         browse_btn.clicked.connect(self._browse_folder)
         folder_row.addWidget(browse_btn)
+        recent_btn = QPushButton("Recent")
+        recent_btn.setMaximumWidth(60)
+        recent_btn.setToolTip("Show recently opened disc images")
+        recent_btn.clicked.connect(self._show_recent_discs_menu)
+        folder_row.addWidget(recent_btn)
         layout.addLayout(folder_row)
 
         # Disc list
@@ -482,7 +487,7 @@ class DiscManagerDialog(QDialog): #vers 2
         except Exception as e:
             self._log(f"Archive error: {e}", error=True)
 
-    def _on_disc_opened(self, disc: DiscImage): #vers 2
+    def _on_disc_opened(self, disc: DiscImage): #vers 3
         self.open_btn.setEnabled(True)
         self._disc = disc
         self._populate_tree(disc)
@@ -492,6 +497,10 @@ class DiscManagerDialog(QDialog): #vers 2
         self._log(f"Disc: {count} total files, {re_cnt} RE game files")
         self.ext_all_btn.setEnabled(count > 0)
         self.ext_re_btn.setEnabled(re_cnt > 0)
+        # Save to recent discs
+        disc_path = self.disc_edit.text().strip()
+        if disc_path:
+            self._save_recent_disc(disc_path)
         # Pre-populate output folder in left panel if it already exists
         out_dir = self._get_output_dir()
         if os.path.isdir(out_dir):
@@ -878,6 +887,48 @@ class DiscManagerDialog(QDialog): #vers 2
                 self.stage_folder_ready.emit(self._last_extracted_dir)
                 return
         print(f"DiscManager: no valid folder to emit (out_dir={out_dir!r})")
+
+    def _show_recent_discs_menu(self): #vers 1
+        """Show popup menu of recently opened disc images."""
+        parent_win = self.parent()
+        rf = getattr(parent_win, '_recent_files', None) if parent_win else None
+
+        from PyQt6.QtWidgets import QMenu
+        menu = QMenu(self)
+
+        recent_discs = rf.get_recent_discs() if rf else []
+        if recent_discs:
+            for path in recent_discs:
+                name = os.path.basename(path)
+                folder = os.path.dirname(path)
+                act = menu.addAction(f"{name}  —  {folder}")
+                act.triggered.connect(
+                    lambda checked, p=path, f=folder: self._open_recent_disc(p, f))
+            menu.addSeparator()
+            menu.addAction("Clear Recent", lambda: rf.clear_recent_discs() if rf and hasattr(rf, 'clear_recent_discs') else None)
+        else:
+            menu.addAction("(no recent disc images)").setEnabled(False)
+
+        btn = self.sender()
+        if btn:
+            menu.exec(btn.mapToGlobal(btn.rect().bottomLeft()))
+
+    def _open_recent_disc(self, disc_path: str, folder: str): #vers 1
+        """Open a recent disc directly."""
+        self.folder_edit.setText(folder)
+        self.disc_edit.setText(disc_path)
+        if not self.out_edit.text():
+            self.out_edit.setText(os.path.join(folder, "extracted"))
+        self._last_extracted_dir = os.path.join(folder, "extracted")
+        self._scan_folder_for_discs(folder)
+        self._open_disc()
+
+    def _save_recent_disc(self, disc_path: str): #vers 1
+        """Save disc path to recent files manager."""
+        parent_win = self.parent()
+        rf = getattr(parent_win, '_recent_files', None) if parent_win else None
+        if rf:
+            rf.add_recent_disc(disc_path)
 
     def _log(self, msg: str, error: bool = False): #vers 1
         color = "#cc6666" if error else "#aaaaaa"

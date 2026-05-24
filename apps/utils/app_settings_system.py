@@ -1681,7 +1681,7 @@ class DebugSettings:
         return self.debug_enabled
 
 class AppSettings:
-    def __init__(self, settings_file="appfactory.settings.json"): #vers 3
+    def __init__(self, settings_file="resbio.settings.json"): #vers 4
         """Initialize application settings with Windows compatibility"""
         current_file_dir = Path(__file__).parent
 
