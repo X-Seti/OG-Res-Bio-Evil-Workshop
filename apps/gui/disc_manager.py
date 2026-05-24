@@ -1,23 +1,31 @@
 #!/usr/bin/env python3
-#this belongs in apps/gui/disc_manager.py - Version: 1
+#this belongs in apps/gui/disc_manager.py - Version: 2
 # X-Seti - May22 2026 - ResBio-Evil-Workshop - Disc Manager
 """
 Disc Manager - Open and extract PS1 disc images (ISO, BIN/CUE, CCD/IMG/SUB)
-and compressed archives (7z, RAR, ZIP). Also builds new ISO images.
-Integrates with the RE file unpacker after extraction.
+and compressed archives (7z, RAR, ZIP).
+Features:
+  - Folder scan to find all disc images
+  - Proper nested directory tree matching ISO filesystem
+  - Right-click context menu: view TIM/RDT/EMD/VAG files directly in viewers
+  - Snapshot: save disc contents to JSON
+  - Extract selected / RE files / all
+  - Build ISO from folder
 """
 
 import os
-from typing import Optional
+import json
+import tempfile
+from typing import Optional, Dict, List
 
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QLineEdit, QFileDialog, QTreeWidget, QTreeWidgetItem,
     QProgressBar, QTextEdit, QFrame, QSplitter, QHeaderView,
     QTabWidget, QWidget, QMessageBox, QAbstractItemView,
-    QGroupBox, QFormLayout, QComboBox
+    QGroupBox, QMenu
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QObject
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QObject, QPoint
 from PyQt6.QtGui import QFont, QColor
 
 from apps.core.disc_image import (
@@ -26,16 +34,25 @@ from apps.core.disc_image import (
 )
 
 ##Methods list -
-# _browse_disc
-# _browse_archive
+# _browse_folder
 # _browse_output
+# _scan_folder_for_discs
+# _on_disc_double_clicked
 # _open_disc
 # _open_archive
 # _populate_tree
+# _build_tree_node
+# _on_tree_context_menu
+# _view_file_in_app
+# _extract_temp_and_view
+# _on_selection_changed
+# _get_output_dir
 # _extract_selected
 # _extract_all_re_files
 # _extract_all
-# _build_iso_tab
+# _save_snapshot
+# _browse_build_source
+# _browse_build_output
 # _do_build_iso
 # _log
 
@@ -43,24 +60,43 @@ from apps.core.disc_image import (
 ##class DiscManagerDialog:
 
 
-# File type colors
+# File type colours
 COLORS = {
     '.RDT': QColor(100, 180, 255),
     '.TIM': QColor(200, 160, 80),
     '.EMD': QColor(150, 220, 150),
+    '.PLD': QColor(130, 200, 130),
     '.PAK': QColor(200, 130, 200),
     '.BSS': QColor(180, 180, 100),
     '.ADT': QColor(200, 120, 100),
+    '.VAG': QColor(100, 200, 200),
+    '.WAV': QColor(100, 200, 200),
+    '.SND': QColor(80, 180, 180),
+    '.BIN': QColor(160, 160, 160),
+    '.DAT': QColor(160, 160, 160),
 }
 
 # RE-relevant extensions
 RE_EXTENSIONS = {'.RDT', '.TIM', '.EMD', '.PAK', '.BSS', '.ADT',
-                 '.PLD', '.EDD', '.BIN', '.DAT', '.SLD', '.PRS'}
+                 '.PLD', '.EDD', '.BIN', '.DAT', '.SLD', '.PRS',
+                 '.VAG', '.WAV', '.SND'}
+
+# What each extension opens in
+VIEWERS = {
+    '.RDT': 'room',
+    '.TIM': 'texture',
+    '.EMD': 'model',
+    '.PLD': 'model',
+    '.VAG': 'audio',
+    '.WAV': 'audio',
+    '.SND': 'audio',
+    '.PAK': 'texture',
+    '.BSS': 'texture',
+}
 
 
 class DiscOpenWorker(QObject): #vers 1
-    """Background worker: open disc image and scan filesystem."""
-    finished = pyqtSignal(object)   # DiscImage
+    finished = pyqtSignal(object)
     error    = pyqtSignal(str)
     progress = pyqtSignal(str)
 
@@ -81,15 +117,14 @@ class DiscOpenWorker(QObject): #vers 1
             self.error.emit(str(e))
 
 
-class DiscManagerDialog(QDialog): #vers 1
-    """Disc image browser, extractor and ISO builder."""
+class DiscManagerDialog(QDialog): #vers 2
 
-    stage_folder_ready = pyqtSignal(str)   # extracted folder ready to scan
+    stage_folder_ready = pyqtSignal(str)
 
     def __init__(self, parent=None): #vers 1
         super().__init__(parent)
-        self.setWindowTitle("Disc Manager")
-        self.resize(900, 640)
+        self.setWindowTitle("Disc Manager \u2014 ResBio-Evil Workshop")
+        self.resize(1100, 720)
         self.setModal(False)
         self._disc: Optional[DiscImage] = None
         self._worker_thread: Optional[QThread] = None
@@ -104,67 +139,65 @@ class DiscManagerDialog(QDialog): #vers 1
         self.tabs.addTab(self._build_build_tab(), "Build ISO")
         layout.addWidget(self.tabs)
 
-        # Log
         self.log_box = QTextEdit()
         self.log_box.setReadOnly(True)
-        self.log_box.setMaximumHeight(100)
+        self.log_box.setMaximumHeight(90)
         self.log_box.setFont(QFont("Courier New", 8))
         layout.addWidget(self.log_box)
-
-    # --- Open/Extract tab ---
 
     def _build_open_tab(self) -> QWidget: #vers 1
         w = QWidget()
         layout = QVBoxLayout(w)
         layout.setSpacing(4)
 
-        # Folder picker row
+        # Folder picker
         folder_row = QHBoxLayout()
         folder_row.addWidget(QLabel("Folder:"))
         self.folder_edit = QLineEdit()
-        self.folder_edit.setPlaceholderText("Folder containing disc images (.img .iso .bin .cue .ccd .7z .rar .zip)")
+        self.folder_edit.setPlaceholderText(
+            "Folder containing disc images (.img .iso .bin .cue .ccd .7z .rar .zip)")
         folder_row.addWidget(self.folder_edit, stretch=1)
-        browse_folder_btn = QPushButton("Browse...")
-        browse_folder_btn.setMaximumWidth(80)
-        browse_folder_btn.clicked.connect(self._browse_folder)
-        folder_row.addWidget(browse_folder_btn)
+        browse_btn = QPushButton("Browse...")
+        browse_btn.setMaximumWidth(80)
+        browse_btn.clicked.connect(self._browse_folder)
+        folder_row.addWidget(browse_btn)
         layout.addLayout(folder_row)
 
-        # Disc image list
-        disc_list_label = QLabel("Disc images found:")
-        disc_list_label.setFont(QFont("Courier New", 8))
-        layout.addWidget(disc_list_label)
-
+        # Disc list
+        layout.addWidget(QLabel("Disc images found:"))
         self.disc_list = QTreeWidget()
         self.disc_list.setColumnCount(3)
         self.disc_list.setHeaderLabels(["File", "Format", "Size"])
-        self.disc_list.setMaximumHeight(120)
+        self.disc_list.setMaximumHeight(110)
         self.disc_list.setAlternatingRowColors(True)
         self.disc_list.setFont(QFont("Courier New", 8))
         self.disc_list.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        self.disc_list.header().resizeSection(1, 120)
+        self.disc_list.header().resizeSection(1, 140)
         self.disc_list.header().resizeSection(2, 80)
         self.disc_list.itemDoubleClicked.connect(self._on_disc_double_clicked)
         layout.addWidget(self.disc_list)
 
-        # Open selected row
+        # Selected disc path
         open_row = QHBoxLayout()
         self.disc_edit = QLineEdit()
-        self.disc_edit.setPlaceholderText("Selected disc image path")
+        self.disc_edit.setPlaceholderText("Disc image path")
         open_row.addWidget(self.disc_edit, stretch=1)
         self.open_btn = QPushButton("Open")
         self.open_btn.setMaximumWidth(60)
         self.open_btn.clicked.connect(self._open_disc)
         open_row.addWidget(self.open_btn)
+
+        snapshot_btn = QPushButton("Snapshot")
+        snapshot_btn.setMaximumWidth(80)
+        snapshot_btn.setToolTip("Save disc contents to JSON snapshot")
+        snapshot_btn.clicked.connect(self._save_snapshot)
+        open_row.addWidget(snapshot_btn)
         layout.addLayout(open_row)
 
         # Format label
-        self.fmt_label = QLabel("Format: —")
+        self.fmt_label = QLabel("Format: \u2014")
         self.fmt_label.setFont(QFont("Courier New", 8))
         layout.addWidget(self.fmt_label)
-
-        sep = QFrame(); sep.setFrameStyle(QFrame.Shape.HLine)
-        layout.addWidget(sep)
 
         # File tree
         self.tree = QTreeWidget()
@@ -176,6 +209,8 @@ class DiscManagerDialog(QDialog): #vers 1
         self.tree.header().resizeSection(1, 80)
         self.tree.header().resizeSection(2, 60)
         self.tree.setFont(QFont("Courier New", 8))
+        self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.tree.customContextMenuRequested.connect(self._on_tree_context_menu)
         layout.addWidget(self.tree, stretch=1)
 
         # Output row
@@ -190,19 +225,17 @@ class DiscManagerDialog(QDialog): #vers 1
         out_row.addWidget(browse_out)
         layout.addLayout(out_row)
 
-        # Progress
         self.progress = QProgressBar()
         self.progress.setVisible(False)
         layout.addWidget(self.progress)
 
-        # Action buttons
         btn_row = QHBoxLayout()
         self.ext_sel_btn = QPushButton("Extract Selected")
         self.ext_sel_btn.setEnabled(False)
         self.ext_sel_btn.clicked.connect(self._extract_selected)
-        self.ext_re_btn = QPushButton("Extract RE Files")
+        self.ext_re_btn  = QPushButton("Extract RE Files")
         self.ext_re_btn.setEnabled(False)
-        self.ext_re_btn.setToolTip("Extract only RDT, TIM, EMD, PAK, BSS, etc.")
+        self.ext_re_btn.setToolTip("Extract only RDT, TIM, EMD, PAK, BSS, VAG etc.")
         self.ext_re_btn.clicked.connect(self._extract_all_re_files)
         self.ext_all_btn = QPushButton("Extract All")
         self.ext_all_btn.setEnabled(False)
@@ -219,49 +252,50 @@ class DiscManagerDialog(QDialog): #vers 1
         self.tree.itemSelectionChanged.connect(self._on_selection_changed)
         return w
 
-    # --- Build ISO tab ---
-
     def _build_build_tab(self) -> QWidget: #vers 1
         w = QWidget()
         layout = QVBoxLayout(w)
         layout.setSpacing(8)
 
         grp = QGroupBox("Build ISO from folder")
-        form = QFormLayout(grp)
+        form = QVBoxLayout(grp)
 
+        src_row = QHBoxLayout()
+        src_row.addWidget(QLabel("Source folder:"))
         self.build_src_edit = QLineEdit()
-        self.build_src_edit.setPlaceholderText("Source folder (extracted game files)")
+        self.build_src_edit.setPlaceholderText("Extracted game files folder")
+        src_row.addWidget(self.build_src_edit, stretch=1)
         src_btn = QPushButton("Browse...")
         src_btn.setMaximumWidth(80)
         src_btn.clicked.connect(self._browse_build_source)
-        src_row = QHBoxLayout()
-        src_row.addWidget(self.build_src_edit, stretch=1)
         src_row.addWidget(src_btn)
-        form.addRow("Source folder:", src_row)
+        form.addLayout(src_row)
 
+        out_row = QHBoxLayout()
+        out_row.addWidget(QLabel("Output ISO: "))
         self.build_out_edit = QLineEdit()
         self.build_out_edit.setPlaceholderText("Output .iso path")
+        out_row.addWidget(self.build_out_edit, stretch=1)
         out_btn = QPushButton("Browse...")
         out_btn.setMaximumWidth(80)
         out_btn.clicked.connect(self._browse_build_output)
-        out_row = QHBoxLayout()
-        out_row.addWidget(self.build_out_edit, stretch=1)
         out_row.addWidget(out_btn)
-        form.addRow("Output ISO:", out_row)
+        form.addLayout(out_row)
 
+        lbl_row = QHBoxLayout()
+        lbl_row.addWidget(QLabel("Volume label:"))
         self.vol_label_edit = QLineEdit("BIOHAZARD")
-        form.addRow("Volume label:", self.vol_label_edit)
-
+        lbl_row.addWidget(self.vol_label_edit)
+        lbl_row.addStretch()
+        form.addLayout(lbl_row)
         layout.addWidget(grp)
 
-        info = QLabel(
-            "Note: This builds a standard ISO9660 data disc.\n"
-            "It does NOT include PS1 anti-piracy data or audio tracks.\n"
-            "Use for PC versions or as an extracted game file archive."
-        )
-        info.setFont(QFont("Courier New", 8))
-        info.setStyleSheet("color: #888;")
-        layout.addWidget(info)
+        note = QLabel(
+            "Note: Builds a standard ISO9660 data disc.\n"
+            "Does not include PS1 anti-piracy data or audio tracks.")
+        note.setFont(QFont("Courier New", 8))
+        note.setStyleSheet("color: #888;")
+        layout.addWidget(note)
 
         self.build_progress = QProgressBar()
         self.build_progress.setVisible(False)
@@ -273,10 +307,9 @@ class DiscManagerDialog(QDialog): #vers 1
         layout.addStretch()
         return w
 
-    # --- Disc opening ---
+    # --- Folder / disc browsing ---
 
     def _browse_folder(self): #vers 1
-        """Browse for a folder, then scan it for disc images."""
         folder = QFileDialog.getExistingDirectory(self, "Select Folder with Disc Images")
         if folder:
             self.folder_edit.setText(folder)
@@ -284,9 +317,12 @@ class DiscManagerDialog(QDialog): #vers 1
                 self.out_edit.setText(os.path.join(folder, "extracted"))
             self._scan_folder_for_discs(folder)
 
+    def _browse_output(self): #vers 1
+        folder = QFileDialog.getExistingDirectory(self, "Select Output Folder")
+        if folder:
+            self.out_edit.setText(folder)
+
     def _scan_folder_for_discs(self, folder: str): #vers 1
-        """Scan folder for disc image files and populate the list."""
-        from apps.core.disc_image import detect_format, DiscFormat
         self.disc_list.clear()
         exts = {'.ISO', '.BIN', '.CUE', '.CCD', '.IMG', '.7Z', '.RAR', '.ZIP'}
         found = []
@@ -296,11 +332,9 @@ class DiscManagerDialog(QDialog): #vers 1
                 dirs.clear()
                 continue
             for fname in sorted(files):
-                ext = os.path.splitext(fname)[1].upper()
-                if ext in exts:
+                if os.path.splitext(fname)[1].upper() in exts:
                     found.append(os.path.join(root, fname))
 
-        # Filter: skip .sub/.sbi, skip .img if .ccd exists, skip multi-track bins
         filtered = []
         for path in found:
             ext = os.path.splitext(path)[1].upper()
@@ -318,58 +352,38 @@ class DiscManagerDialog(QDialog): #vers 1
             filtered.append(path)
 
         for path in filtered:
-            fmt = detect_format(path)
-            size = os.path.getsize(path)
-            size_str = (f"{size/1024/1024:.0f} MB" if size > 1024*1024
-                        else f"{size//1024} KB")
-            rel = os.path.relpath(path, folder)
-            row = QTreeWidgetItem([rel, fmt.value, size_str])
+            fmt   = detect_format(path)
+            size  = os.path.getsize(path)
+            sz_s  = f"{size/1024/1024:.0f} MB" if size > 1048576 else f"{size//1024} KB"
+            rel   = os.path.relpath(path, folder)
+            row   = QTreeWidgetItem([rel, fmt.value, sz_s])
             row.setData(0, Qt.ItemDataRole.UserRole, path)
             self.disc_list.addTopLevelItem(row)
 
         count = self.disc_list.topLevelItemCount()
         self._log(f"Found {count} disc image{'s' if count != 1 else ''} in {folder}")
-
         if count == 1:
             item = self.disc_list.topLevelItem(0)
             self.disc_list.setCurrentItem(item)
             self.disc_edit.setText(item.data(0, Qt.ItemDataRole.UserRole))
 
     def _on_disc_double_clicked(self, item): #vers 1
-        """Double-click disc in list -> select and open."""
         path = item.data(0, Qt.ItemDataRole.UserRole)
         if path:
             self.disc_edit.setText(path)
             self._open_disc()
 
-    def _browse_disc(self): #vers 1
-        """Fallback: open single disc image directly."""
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Open Disc Image", "",
-            "Disc Images (*.iso *.bin *.cue *.ccd *.img *.7z *.rar *.zip);;All Files (*)"
-        )
-        if path:
-            self.disc_edit.setText(path)
-            folder = os.path.dirname(path)
-            if not self.out_edit.text():
-                self.out_edit.setText(os.path.join(folder, "extracted"))
-            self._open_disc()
-
-    def _browse_output(self): #vers 1
-        folder = QFileDialog.getExistingDirectory(self, "Select Output Folder")
-        if folder:
-            self.out_edit.setText(folder)
+    # --- Disc opening ---
 
     def _open_disc(self): #vers 1
         path = self.disc_edit.text().strip()
         if not path or not os.path.exists(path):
-            QMessageBox.warning(self, "Open", "Please select a valid disc image file.")
+            QMessageBox.warning(self, "Open", "Please select a valid disc image.")
             return
 
         fmt = detect_format(path)
         self.fmt_label.setText(f"Format: {fmt.value}")
 
-        # Handle archives specially - just list contents
         if fmt in (DiscFormat.ARCHIVE_7Z, DiscFormat.ARCHIVE_RAR, DiscFormat.ARCHIVE_ZIP):
             self._open_archive(path, fmt)
             return
@@ -388,24 +402,24 @@ class DiscManagerDialog(QDialog): #vers 1
         self._worker_thread.start()
 
     def _open_archive(self, path: str, fmt: DiscFormat): #vers 1
-        """List archive contents without full extraction."""
         try:
-            arch = ArchiveImage(path)
+            arch     = ArchiveImage(path)
             contents = arch.list_archive_contents()
             self.tree.clear()
-            root = QTreeWidgetItem([os.path.basename(path), f"{len(contents)} files", fmt.value])
+            root = QTreeWidgetItem([os.path.basename(path),
+                                    f"{len(contents)} files", fmt.value])
             root.setFont(0, QFont("Courier New", 8, QFont.Weight.Bold))
             self.tree.addTopLevelItem(root)
             for name in contents:
-                child = QTreeWidgetItem([name, "", ""])
                 ext = os.path.splitext(name)[1].upper()
+                child = QTreeWidgetItem([name, "", ""])
                 if ext in COLORS:
                     child.setForeground(0, COLORS[ext])
                 root.addChild(child)
             root.setExpanded(True)
             self.ext_all_btn.setEnabled(True)
             self._disc = arch
-            self._log(f"Archive: {len(contents)} files inside {os.path.basename(path)}")
+            self._log(f"Archive: {len(contents)} files")
         except Exception as e:
             self._log(f"Archive error: {e}", error=True)
 
@@ -413,50 +427,235 @@ class DiscManagerDialog(QDialog): #vers 1
         self.open_btn.setEnabled(True)
         self._disc = disc
         self._populate_tree(disc)
-        count = len(disc.list_files())
-        re_count = sum(1 for f in disc.list_files()
-                       if os.path.splitext(f.name)[1].upper() in RE_EXTENSIONS)
-        self._log(f"Disc: {count} total files, {re_count} RE game files")
+        count   = len(disc.list_files())
+        re_cnt  = sum(1 for f in disc.list_files()
+                      if os.path.splitext(f.name)[1].upper() in RE_EXTENSIONS)
+        self._log(f"Disc: {count} total files, {re_cnt} RE game files")
         self.ext_all_btn.setEnabled(count > 0)
-        self.ext_re_btn.setEnabled(re_count > 0)
+        self.ext_re_btn.setEnabled(re_cnt > 0)
 
     def _on_disc_error(self, msg: str): #vers 1
         self.open_btn.setEnabled(True)
         self._log(f"Error: {msg}", error=True)
 
-    def _populate_tree(self, disc: DiscImage): #vers 1
+    # --- Nested tree ---
+
+    def _populate_tree(self, disc: DiscImage): #vers 2
+        """Build a fully nested directory tree matching the ISO filesystem."""
         self.tree.clear()
-        files = disc.list_files()
+        dir_nodes: Dict[str, QTreeWidgetItem] = {}
 
-        # Group by top-level directory
-        dirs: dict = {}
-        for f in files:
-            parts = f.path.lstrip('/').split('/')
-            top = parts[0] if len(parts) > 1 else ''
-            dirs.setdefault(top, []).append(f)
-
-        for top_dir, dir_files in sorted(dirs.items()):
-            if top_dir:
-                parent = QTreeWidgetItem([top_dir, "", "DIR"])
-                parent.setFont(0, QFont("Courier New", 8, QFont.Weight.Bold))
-                parent.setForeground(0, QColor(150, 190, 230))
-                self.tree.addTopLevelItem(parent)
+        def get_dir_node(dir_path: str) -> QTreeWidgetItem:
+            """Return (creating if needed) the tree node for a directory."""
+            if dir_path in dir_nodes:
+                return dir_nodes[dir_path]
+            parts = dir_path.strip('/').split('/')
+            # Ensure parent exists
+            if len(parts) > 1:
+                parent_path = '/' + '/'.join(parts[:-1])
+                parent_node = get_dir_node(parent_path)
             else:
-                parent = self.tree.invisibleRootItem()
+                parent_node = self.tree.invisibleRootItem()
 
-            for f in dir_files:
+            node = QTreeWidgetItem([parts[-1], "", "DIR"])
+            node.setFont(0, QFont("Courier New", 8, QFont.Weight.Bold))
+            node.setForeground(0, QColor(150, 190, 230))
+            node.setExpanded(True)
+            parent_node.addChild(node)
+            dir_nodes[dir_path] = node
+            return node
+
+        for f in disc.list_files():
+            if f.is_dir:
+                get_dir_node(f.path)
+                continue
+
+            parts    = f.path.strip('/').split('/')
+            dir_path = ('/' + '/'.join(parts[:-1])) if len(parts) > 1 else '/'
+            parent   = get_dir_node(dir_path)
+
+            ext      = os.path.splitext(f.name)[1].upper()
+            size_str = f"{f.size:,}B" if f.size else ""
+            row      = QTreeWidgetItem([f.name, size_str, ext.lstrip('.')])
+            row.setData(0, Qt.ItemDataRole.UserRole, f)
+            if ext in COLORS:
+                row.setForeground(0, COLORS[ext])
+            parent.addChild(row)
+
+        # Expand top level only
+        root = self.tree.invisibleRootItem()
+        for i in range(root.childCount()):
+            root.child(i).setExpanded(True)
+
+    # --- Right-click context menu ---
+
+    def _on_tree_context_menu(self, pos: QPoint): #vers 1
+        item = self.tree.itemAt(pos)
+        menu = QMenu(self)
+
+        if item:
+            f: Optional[DiscFile] = item.data(0, Qt.ItemDataRole.UserRole)
+            if f and not f.is_dir:
                 ext = os.path.splitext(f.name)[1].upper()
-                size_str = f"{f.size:,}B" if f.size else ""
-                row = QTreeWidgetItem([f.path, size_str, ext.lstrip('.')])
-                row.setData(0, Qt.ItemDataRole.UserRole, f)
-                if ext in COLORS:
-                    row.setForeground(0, COLORS[ext])
-                parent.addChild(row)
+                viewer = VIEWERS.get(ext)
 
-            if top_dir:
-                parent.setExpanded(True)
+                if viewer == 'room':
+                    menu.addAction(f"\U0001f3e0  Load Room in Editor",
+                        lambda: self._extract_temp_and_view(f, 'room'))
+                elif viewer == 'texture':
+                    menu.addAction(f"\U0001f5bc  View Texture (TIM)",
+                        lambda: self._extract_temp_and_view(f, 'texture'))
+                elif viewer == 'model':
+                    menu.addAction(f"\U0001f4e6  View Model (EMD)",
+                        lambda: self._extract_temp_and_view(f, 'model'))
+                elif viewer == 'audio':
+                    menu.addAction(f"\U0001f3b5  Play Audio",
+                        lambda: self._extract_temp_and_view(f, 'audio'))
 
-    # --- Extraction ---
+                menu.addAction(f"Extract  {f.name}",
+                    lambda: self._extract_single(f))
+                menu.addAction("Extract to...",
+                    lambda: self._extract_single_to(f))
+                menu.addSeparator()
+
+            # Folder operations
+            if item.childCount() > 0 or (f is None):
+                menu.addAction("Extract Folder Contents",
+                    lambda: self._extract_folder_item(item))
+                menu.addSeparator()
+
+        menu.addAction("Extract RE Files", self._extract_all_re_files)
+        menu.addAction("Extract All",      self._extract_all)
+        menu.addSeparator()
+        menu.addAction("Save Snapshot (JSON)", self._save_snapshot)
+
+        menu.exec(self.tree.viewport().mapToGlobal(pos))
+
+    def _extract_temp_and_view(self, f: DiscFile, viewer_type: str): #vers 1
+        """Extract file to temp, open in appropriate viewer."""
+        if not self._disc:
+            return
+        try:
+            suffix = os.path.splitext(f.name)[1]
+            fd, tmp = tempfile.mkstemp(suffix=suffix)
+            os.close(fd)
+            self._disc.extract_file(f.path, tmp)
+            self._log(f"Extracted to temp: {tmp}")
+            self._open_in_viewer(tmp, viewer_type)
+        except Exception as e:
+            self._log(f"View error: {e}", error=True)
+            QMessageBox.warning(self, "View Error", str(e))
+
+    def _open_in_viewer(self, path: str, viewer_type: str): #vers 1
+        """Route file to the correct viewer in the main window."""
+        parent = self.parent()
+        if not parent:
+            return
+        try:
+            if viewer_type == 'room':
+                parent._load_rdt(path)
+                parent.display_mode_combo.setCurrentText("Room Map")
+                self.stage_folder_ready.emit(os.path.dirname(path))
+            elif viewer_type == 'texture':
+                parent.show_tim_file(path)
+            elif viewer_type == 'model':
+                if hasattr(parent, 'emd_viewer') and parent.emd_viewer:
+                    parent.emd_viewer.load_emd_file(path)
+                    parent.display_mode_combo.setCurrentText("Model")
+            elif viewer_type == 'audio':
+                if hasattr(parent, 'audio_player') and parent.audio_player:
+                    parent.audio_player.load_file(path)
+        except Exception as e:
+            self._log(f"Open in viewer error: {e}", error=True)
+
+    # --- Single file extraction ---
+
+    def _extract_single(self, f: DiscFile): #vers 1
+        """Extract one file to the current output directory."""
+        out_dir = self._get_output_dir()
+        dest = os.path.join(out_dir, f.path.lstrip('/').replace('/', os.sep))
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        try:
+            self._disc.extract_file(f.path, dest)
+            self._log(f"Extracted: {f.path} -> {dest}")
+        except Exception as e:
+            self._log(f"Error: {e}", error=True)
+
+    def _extract_single_to(self, f: DiscFile): #vers 1
+        """Extract one file with a Save As dialog."""
+        dest, _ = QFileDialog.getSaveFileName(
+            self, f"Extract {f.name}", f.name)
+        if dest:
+            try:
+                self._disc.extract_file(f.path, dest)
+                self._log(f"Extracted: {f.name} -> {dest}")
+            except Exception as e:
+                self._log(f"Error: {e}", error=True)
+
+    def _extract_folder_item(self, item: QTreeWidgetItem): #vers 1
+        """Extract all files under a directory tree node."""
+        if not self._disc:
+            return
+        out_dir = self._get_output_dir()
+        count = 0
+
+        def extract_children(node: QTreeWidgetItem):
+            nonlocal count
+            for i in range(node.childCount()):
+                child = node.child(i)
+                f: Optional[DiscFile] = child.data(0, Qt.ItemDataRole.UserRole)
+                if f and not f.is_dir:
+                    dest = os.path.join(out_dir,
+                                        f.path.lstrip('/').replace('/', os.sep))
+                    os.makedirs(os.path.dirname(dest), exist_ok=True)
+                    try:
+                        self._disc.extract_file(f.path, dest)
+                        count += 1
+                    except Exception as e:
+                        self._log(f"  Error {f.path}: {e}", error=True)
+                if child.childCount():
+                    extract_children(child)
+
+        extract_children(item)
+        self._log(f"Extracted {count} files to {out_dir}")
+
+    # --- Snapshot ---
+
+    def _save_snapshot(self): #vers 1
+        """Save disc contents as a JSON snapshot file."""
+        if not self._disc:
+            QMessageBox.warning(self, "Snapshot", "No disc mounted.")
+            return
+
+        disc_name = os.path.splitext(
+            os.path.basename(self.disc_edit.text()))[0]
+        default = os.path.join(self._get_output_dir(), f"{disc_name}_snapshot.json")
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save Snapshot", default, "JSON (*.json)")
+        if not path:
+            return
+
+        files = self.disc_disc_files() if hasattr(self, 'disc_disc_files') \
+                else self._disc.list_files()
+        doc = {
+            "disc":    self.disc_edit.text(),
+            "format":  self.fmt_label.text().replace("Format: ", ""),
+            "files":   [
+                {
+                    "path": f.path,
+                    "size": f.size,
+                    "type": os.path.splitext(f.name)[1].upper().lstrip('.'),
+                }
+                for f in self._disc.list_files() if not f.is_dir
+            ]
+        }
+        with open(path, 'w', encoding='utf-8') as fp:
+            json.dump(doc, fp, indent=2)
+        self._log(f"Snapshot saved: {path} ({len(doc['files'])} files)")
+        QMessageBox.information(self, "Snapshot Saved",
+            f"Saved {len(doc['files'])} entries to:\n{path}")
+
+    # --- Bulk extraction ---
 
     def _on_selection_changed(self): #vers 1
         items = [i for i in self.tree.selectedItems()
@@ -477,26 +676,23 @@ class DiscManagerDialog(QDialog): #vers 1
         out_dir = self._get_output_dir()
         self.progress.setVisible(True)
         self.progress.setMaximum(len(items))
-        done = 0
         for i, item in enumerate(items):
             f: DiscFile = item.data(0, Qt.ItemDataRole.UserRole)
             dest = os.path.join(out_dir, f.path.lstrip('/').replace('/', os.sep))
             os.makedirs(os.path.dirname(dest), exist_ok=True)
             try:
                 self._disc.extract_file(f.path, dest)
-                done += 1
-                self._log(f"  {f.path}")
             except Exception as e:
-                self._log(f"  ERROR {f.path}: {e}", error=True)
+                self._log(f"  Error {f.path}: {e}", error=True)
             self.progress.setValue(i + 1)
         self.progress.setVisible(False)
-        self._log(f"Extracted {done}/{len(items)} to {out_dir}")
+        self._log(f"Extracted {len(items)} files to {out_dir}")
         self._offer_open_stage(out_dir)
 
     def _extract_all_re_files(self): #vers 1
         if not self._disc:
             return
-        out_dir = self._get_output_dir()
+        out_dir  = self._get_output_dir()
         re_files = [f for f in self._disc.list_files()
                     if os.path.splitext(f.name)[1].upper() in RE_EXTENSIONS]
         self.progress.setVisible(True)
@@ -509,7 +705,7 @@ class DiscManagerDialog(QDialog): #vers 1
                 self._disc.extract_file(f.path, dest)
                 done += 1
             except Exception as e:
-                self._log(f"  ERROR {f.path}: {e}", error=True)
+                self._log(f"  Error {f.path}: {e}", error=True)
             self.progress.setValue(i + 1)
         self.progress.setVisible(False)
         self._log(f"Extracted {done} RE files to {out_dir}")
@@ -519,15 +715,11 @@ class DiscManagerDialog(QDialog): #vers 1
         if not self._disc:
             return
         out_dir = self._get_output_dir()
-
-        # Archives extract differently
         if isinstance(self._disc, ArchiveImage):
-            self._log(f"Extracting archive to {out_dir}...")
             extracted = self._disc.extract_archive_to(out_dir)
             self._log(f"Extracted {len(extracted)} files")
             self._offer_open_stage(out_dir)
             return
-
         files = [f for f in self._disc.list_files() if not f.is_dir]
         self.progress.setVisible(True)
         self.progress.setMaximum(len(files))
@@ -539,7 +731,7 @@ class DiscManagerDialog(QDialog): #vers 1
                 self._disc.extract_file(f.path, dest)
                 done += 1
             except Exception as e:
-                self._log(f"  ERROR {f.path}: {e}", error=True)
+                self._log(f"  Error {f.path}: {e}", error=True)
             self.progress.setValue(i + 1)
         self.progress.setVisible(False)
         self._log(f"Extracted {done}/{len(files)} to {out_dir}")
@@ -552,7 +744,7 @@ class DiscManagerDialog(QDialog): #vers 1
         if reply == QMessageBox.StandardButton.Yes:
             self.stage_folder_ready.emit(out_dir)
 
-    # --- Build ISO tab ---
+    # --- Build ISO ---
 
     def _browse_build_source(self): #vers 1
         folder = QFileDialog.getExistingDirectory(self, "Select Source Folder")
@@ -568,21 +760,18 @@ class DiscManagerDialog(QDialog): #vers 1
             self.build_out_edit.setText(path)
 
     def _do_build_iso(self): #vers 1
-        src = self.build_src_edit.text().strip()
-        out = self.build_out_edit.text().strip()
+        src   = self.build_src_edit.text().strip()
+        out   = self.build_out_edit.text().strip()
         label = self.vol_label_edit.text().strip() or 'BIOHAZARD'
-
         if not src or not os.path.isdir(src):
-            QMessageBox.warning(self, "Build ISO", "Please select a valid source folder.")
+            QMessageBox.warning(self, "Build ISO", "Select a valid source folder.")
             return
         if not out:
-            QMessageBox.warning(self, "Build ISO", "Please specify output ISO path.")
+            QMessageBox.warning(self, "Build ISO", "Specify output ISO path.")
             return
-
         self.build_progress.setVisible(True)
-        self.build_progress.setRange(0, 0)  # indeterminate
+        self.build_progress.setRange(0, 0)
         self._log(f"Building ISO: {out}")
-
         try:
             ok = build_iso(src, out, volume_label=label)
             self.build_progress.setVisible(False)
@@ -590,10 +779,9 @@ class DiscManagerDialog(QDialog): #vers 1
                 size = os.path.getsize(out)
                 self._log(f"ISO built: {out}  ({size:,} bytes)")
                 QMessageBox.information(self, "ISO Built",
-                    f"ISO created successfully:\n{out}\n{size:,} bytes")
+                    f"ISO created:\n{out}\n{size:,} bytes")
             else:
                 self._log("ISO build failed", error=True)
-                QMessageBox.critical(self, "Build Failed", "ISO build failed. Check log.")
         except Exception as e:
             self.build_progress.setVisible(False)
             self._log(f"ISO build error: {e}", error=True)
