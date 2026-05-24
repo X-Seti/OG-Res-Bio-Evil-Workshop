@@ -298,7 +298,7 @@ class DiscManagerDialog(QDialog): #vers 2
         self.ext_all_btn.setEnabled(False)
         self.ext_all_btn.clicked.connect(self._extract_all)
         close_btn = QPushButton("Close")
-        close_btn.clicked.connect(self.close)
+        close_btn.clicked.connect(self._on_close)
         btn_row.addWidget(self.ext_sel_btn)
         btn_row.addWidget(self.ext_re_btn)
         btn_row.addWidget(self.ext_all_btn)
@@ -848,6 +848,21 @@ class DiscManagerDialog(QDialog): #vers 2
             QMessageBox.critical(self, "Error", str(e))
 
     # --- Log ---
+
+    def _on_close(self): #vers 1
+        """Emit extracted folder to left panel before closing."""
+        out_dir = self._get_output_dir()
+        if os.path.isdir(out_dir):
+            self._log(f"Loading into Game Files: {out_dir}")
+            self.stage_folder_ready.emit(out_dir)
+        self.close()
+
+    def closeEvent(self, event): #vers 1
+        """On any close (X button or Close), load output folder into left panel."""
+        out_dir = self._get_output_dir()
+        if os.path.isdir(out_dir):
+            self.stage_folder_ready.emit(out_dir)
+        event.accept()
 
     def _log(self, msg: str, error: bool = False): #vers 1
         color = "#cc6666" if error else "#aaaaaa"
