@@ -185,6 +185,7 @@ class DiscManagerDialog(QDialog): #vers 2
         self.setModal(False)
         self._disc: Optional[DiscImage] = None
         self._worker_thread: Optional[QThread] = None
+        self._last_extracted_dir: str = ''
         self._build_ui()
 
     def _build_ui(self): #vers 1
@@ -372,6 +373,7 @@ class DiscManagerDialog(QDialog): #vers 2
             self.folder_edit.setText(folder)
             if not self.out_edit.text():
                 self.out_edit.setText(os.path.join(folder, "extracted"))
+            self._last_extracted_dir = os.path.join(folder, "extracted")
             self._scan_folder_for_discs(folder)
 
     def _browse_output(self): #vers 1
@@ -799,10 +801,12 @@ class DiscManagerDialog(QDialog): #vers 2
         self._log(f"Extracted {done}/{len(files)} to {out_dir}")
         self._offer_open_stage(out_dir)
 
-    def _offer_open_stage(self, out_dir: str): #vers 2
-        """Auto-load the extracted folder into the left panel immediately."""
-        self._log(f"Loading into Game Files panel: {out_dir}")
-        self.stage_folder_ready.emit(out_dir)
+    def _offer_open_stage(self, out_dir: str): #vers 3
+        """Store and emit extracted folder path."""
+        self._last_extracted_dir = out_dir
+        self._log(f"Extracted to: {out_dir}")
+        # Don't emit here - wait for close so user can verify contents first
+        # (emitting on close ensures panel loads after dialog is gone)
 
     # --- Build ISO ---
 
@@ -849,20 +853,31 @@ class DiscManagerDialog(QDialog): #vers 2
 
     # --- Log ---
 
-    def _on_close(self): #vers 1
-        """Emit extracted folder to left panel before closing."""
-        out_dir = self._get_output_dir()
-        if os.path.isdir(out_dir):
-            self._log(f"Loading into Game Files: {out_dir}")
-            self.stage_folder_ready.emit(out_dir)
-        self.close()
+    def _on_close(self): #vers 2
+        """Emit extracted folder to left panel then hide."""
+        self._emit_stage_folder()
+        self.hide()
 
-    def closeEvent(self, event): #vers 1
-        """On any close (X button or Close), load output folder into left panel."""
-        out_dir = self._get_output_dir()
-        if os.path.isdir(out_dir):
-            self.stage_folder_ready.emit(out_dir)
+    def closeEvent(self, event): #vers 2
+        """On X button close, emit stage folder then accept."""
+        self._emit_stage_folder()
         event.accept()
+
+    def _emit_stage_folder(self): #vers 1
+        """Emit stage_folder_ready with the best available folder path."""
+        # Try output dir first
+        out_dir = self._get_output_dir()
+        if out_dir and os.path.isdir(out_dir):
+            print(f"DiscManager: emitting stage folder: {out_dir}")
+            self.stage_folder_ready.emit(out_dir)
+            return
+        # Try last known extracted folder
+        if hasattr(self, '_last_extracted_dir') and self._last_extracted_dir:
+            if os.path.isdir(self._last_extracted_dir):
+                print(f"DiscManager: emitting last extracted: {self._last_extracted_dir}")
+                self.stage_folder_ready.emit(self._last_extracted_dir)
+                return
+        print(f"DiscManager: no valid folder to emit (out_dir={out_dir!r})")
 
     def _log(self, msg: str, error: bool = False): #vers 1
         color = "#cc6666" if error else "#aaaaaa"

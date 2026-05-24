@@ -4984,15 +4984,22 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             idx = 0
         self.display_mode_combo.setCurrentText(modes[idx])
 
-    def _open_disc_manager(self): #vers 1
+    def _open_disc_manager(self): #vers 2
         """Open the disc image manager dialog."""
         try:
             from apps.gui.disc_manager import DiscManagerDialog
+            # Always recreate so signal is fresh and old state is cleared
             if not hasattr(self, '_disc_manager') or self._disc_manager is None:
                 self._disc_manager = DiscManagerDialog(self)
-                self._disc_manager.stage_folder_ready.connect(self._load_stage_folder)
+            # Reconnect signal each time (safe: Qt deduplicates)
+            try:
+                self._disc_manager.stage_folder_ready.disconnect()
+            except Exception:
+                pass
+            self._disc_manager.stage_folder_ready.connect(self._load_stage_folder)
             self._disc_manager.show()
             self._disc_manager.raise_()
+            self._disc_manager.activateWindow()
         except Exception as e:
             img_debugger.error(f"Disc manager error: {e}")
             QMessageBox.critical(self, "Error", f"Failed to open disc manager:\n{str(e)}")
