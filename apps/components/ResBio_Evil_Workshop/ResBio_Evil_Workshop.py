@@ -1781,16 +1781,19 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         if folder:
             self._load_stage_folder(folder)
 
-    def _load_stage_folder(self, folder_path: str): #vers 4
+    def _load_stage_folder(self, folder_path: str): #vers 5
         """Load stage folder - walks subdirs to find all RDTs.
         Handles both flat folders and disc-extracted trees like /PSX/STAGE1/.
         """
-        print(f"_load_stage_folder called: {folder_path!r}")
-        print(f"  col_list_widget exists: {hasattr(self, 'col_list_widget')}")
-        if hasattr(self, 'col_list_widget'):
-            print(f"  col_list_widget is: {self.col_list_widget!r}")
-        if not hasattr(self, 'col_list_widget') or not self.col_list_widget:
-            print("  EARLY RETURN - no col_list_widget")
+        # Guard: QListWidget bool() returns False when C++ object deleted
+        # Use try/except instead of truthiness check
+        try:
+            if not hasattr(self, 'col_list_widget') or self.col_list_widget is None:
+                return
+            # Test the widget is still alive by accessing it
+            _ = self.col_list_widget.count()
+        except RuntimeError:
+            # C++ object deleted
             return
 
         self.col_list_widget.clear()
