@@ -1781,26 +1781,36 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         if folder:
             self._load_stage_folder(folder)
 
-    def _load_stage_folder(self, folder_path: str): #vers 3
-        """Load stage folder using asset loader - populates left list,
-        stage map, and floor plan progressively as files load."""
+    def _load_stage_folder(self, folder_path: str): #vers 4
+        """Load stage folder - walks subdirs to find all RDTs.
+        Handles both flat folders and disc-extracted trees like /PSX/STAGE1/.
+        """
         if not hasattr(self, 'col_list_widget') or not self.col_list_widget:
             return
 
-        # Populate left file list immediately (no parsing needed)
         self.col_list_widget.clear()
         if hasattr(self, 'folder_path_label'):
             self.folder_path_label.setText(os.path.basename(folder_path))
             self.folder_path_label.setToolTip(folder_path)
 
-        rdt_files = sorted([f for f in os.listdir(folder_path)
-                            if f.upper().endswith('.RDT')])
-        for filename in rdt_files:
-            full_path = os.path.join(folder_path, filename)
+        # Walk subdirs to collect all RDTs (disc extractions have STAGE1/, STAGE2/ etc.)
+        all_rdts = []
+        for root, dirs, files in os.walk(folder_path):
+            dirs.sort()
+            for fname in sorted(files):
+                if fname.upper().endswith('.RDT'):
+                    all_rdts.append(os.path.join(root, fname))
+
+        # Show in left panel with relative path as label
+        for full_path in all_rdts:
+            rel = os.path.relpath(full_path, folder_path)
             size = os.path.getsize(full_path)
-            item = QListWidgetItem(f"{filename}  ({size}B)")
+            size_str = f"{size//1024}KB" if size > 1024 else f"{size}B"
+            item = QListWidgetItem(f"{rel}  ({size_str})")
             item.setData(Qt.ItemDataRole.UserRole, full_path)
             self.col_list_widget.addItem(item)
+
+        rdt_files = [os.path.basename(p) for p in all_rdts]
 
         # Load stage map (uses its own internal loader)
         if hasattr(self, 'stage_map_editor') and self.stage_map_editor:

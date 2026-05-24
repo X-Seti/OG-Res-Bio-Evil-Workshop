@@ -117,10 +117,10 @@ class StageAssetLoader(QObject): #vers 1
         done = 0
 
         # Step 1: Load all RDTs
-        for filename in rdt_files:
+        for full_path in rdt_files:
             if self._cancelled:
                 break
-            full_path = os.path.join(folder, filename)
+            filename = os.path.basename(full_path)
             room_id = os.path.splitext(filename)[0].upper()
             self.progress.emit(f"Loading RDT: {filename}", done, total_steps)
             try:

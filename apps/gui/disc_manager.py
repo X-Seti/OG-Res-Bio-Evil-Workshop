@@ -480,7 +480,7 @@ class DiscManagerDialog(QDialog): #vers 2
         except Exception as e:
             self._log(f"Archive error: {e}", error=True)
 
-    def _on_disc_opened(self, disc: DiscImage): #vers 1
+    def _on_disc_opened(self, disc: DiscImage): #vers 2
         self.open_btn.setEnabled(True)
         self._disc = disc
         self._populate_tree(disc)
@@ -490,6 +490,11 @@ class DiscManagerDialog(QDialog): #vers 2
         self._log(f"Disc: {count} total files, {re_cnt} RE game files")
         self.ext_all_btn.setEnabled(count > 0)
         self.ext_re_btn.setEnabled(re_cnt > 0)
+        # Pre-populate output folder in left panel if it already exists
+        out_dir = self._get_output_dir()
+        if os.path.isdir(out_dir):
+            self._log(f"Found existing extracted folder: {out_dir}")
+            self.stage_folder_ready.emit(out_dir)
 
     def _on_disc_error(self, msg: str): #vers 1
         self.open_btn.setEnabled(True)
@@ -794,12 +799,10 @@ class DiscManagerDialog(QDialog): #vers 2
         self._log(f"Extracted {done}/{len(files)} to {out_dir}")
         self._offer_open_stage(out_dir)
 
-    def _offer_open_stage(self, out_dir: str): #vers 1
-        reply = QMessageBox.question(self, "Open Stage Folder",
-            f"Open extracted files as stage folder?\n{out_dir}",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        if reply == QMessageBox.StandardButton.Yes:
-            self.stage_folder_ready.emit(out_dir)
+    def _offer_open_stage(self, out_dir: str): #vers 2
+        """Auto-load the extracted folder into the left panel immediately."""
+        self._log(f"Loading into Game Files panel: {out_dir}")
+        self.stage_folder_ready.emit(out_dir)
 
     # --- Build ISO ---
 
