@@ -1785,7 +1785,12 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         """Load stage folder - walks subdirs to find all RDTs.
         Handles both flat folders and disc-extracted trees like /PSX/STAGE1/.
         """
+        print(f"_load_stage_folder called: {folder_path!r}")
+        print(f"  col_list_widget exists: {hasattr(self, 'col_list_widget')}")
+        if hasattr(self, 'col_list_widget'):
+            print(f"  col_list_widget is: {self.col_list_widget!r}")
         if not hasattr(self, 'col_list_widget') or not self.col_list_widget:
+            print("  EARLY RETURN - no col_list_widget")
             return
 
         self.col_list_widget.clear()
