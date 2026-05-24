@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=ResBio-Evil Workshop
+GenericName=Resident Evil File Editor
+Comment=Editor and room viewer for Resident Evil 1, 2 and 3 (PS1/PC)
+Exec=python3 /home/x2/Documents/GitHub/Resbio-Evil-Workshop/launcher.py
+Icon=/home/x2/Documents/GitHub/Resbio-Evil-Workshop/apps/icons/app_icon.png
+Terminal=false
+Categories=Game;Development;
+Keywords=resident;evil;biohazard;rdt;ps1;modding;
+StartupWMClass=ResBio-Evil-Workshop
+StartupNotify=true
