@@ -85,6 +85,17 @@ def load_rdt_file(main_window: 'ResBioEvilWorkshop', file_path: str) -> Optional
     if hasattr(main_window, 'scripts_btn'):
         main_window.scripts_btn.setEnabled(rdt.valid)
 
+    # Init item icon cache if not already loaded
+    from apps.core.re_item_icons import is_cache_loaded, init_icon_cache
+    if not is_cache_loaded():
+        search_roots = [
+            os.path.dirname(rdt.file_path),          # room folder
+            os.path.dirname(os.path.dirname(rdt.file_path)),  # parent
+            os.path.dirname(os.path.dirname(os.path.dirname(rdt.file_path))),  # grandparent
+        ]
+        if init_icon_cache(search_roots):
+            img_debugger.debug("Item icon cache loaded from STATUS.TIM")
+
     # Load audio file for this room if player exists
     if hasattr(main_window, 'audio_player') and main_window.audio_player:
         from apps.core.re_audio import scan_audio_files
@@ -152,21 +163,48 @@ def populate_room_table(main_window: 'ResBioEvilWorkshop', rdt: RDTFile): #vers 
     table.resizeRowsToContents()
 
 
-def populate_items_table(main_window: 'ResBioEvilWorkshop', rdt: RDTFile): #vers 1
-    """Populate table with item placement data."""
+def populate_items_table(main_window: 'ResBioEvilWorkshop', rdt: RDTFile): #vers 2
+    """Populate table with item placement data, icons and correct game names."""
+    from apps.core.re_room_names import get_game_from_room_id
+    from apps.core.re_item_icons import get_item_icon, is_cache_loaded
+
+    # Detect game for correct item names
+    game = get_game_from_room_id(rdt.room_id)
+
     table = main_window.middle_list
-    table.setColumnCount(5)
-    table.setHorizontalHeaderLabels(["Item", "Type", "X", "Y", "Z"])
+    use_icons = is_cache_loaded()
+
+    table.setColumnCount(6 if use_icons else 5)
+    if use_icons:
+        table.setHorizontalHeaderLabels(["", "Item", "Type", "X", "Y", "Z"])
+        table.setColumnWidth(0, 32)
+    else:
+        table.setHorizontalHeaderLabels(["Item", "Type", "X", "Y", "Z"])
     table.setRowCount(len(rdt.items))
+    table.setRowCount(len(rdt.items))
+    table.verticalHeader().setDefaultSectionSize(28)
 
     for row, item in enumerate(rdt.items):
-        table.setItem(row, 0, QTableWidgetItem(get_item_name(item.item_type)))
-        table.setItem(row, 1, QTableWidgetItem(f"0x{item.item_type:02X}"))
-        table.setItem(row, 2, QTableWidgetItem(str(item.x)))
-        table.setItem(row, 3, QTableWidgetItem(str(item.y)))
-        table.setItem(row, 4, QTableWidgetItem(str(item.z)))
+        name = get_item_name(item.item_type, game)
+        col = 0
+
+        if use_icons:
+            icon_item = QTableWidgetItem()
+            px = get_item_icon(item.item_type, 24)
+            if px:
+                icon_item.setData(Qt.ItemDataRole.DecorationRole, px)
+            table.setItem(row, col, icon_item)
+            col += 1
+
+        table.setItem(row, col,   QTableWidgetItem(name))
+        table.setItem(row, col+1, QTableWidgetItem(f"0x{item.item_type:02X}"))
+        table.setItem(row, col+2, QTableWidgetItem(str(item.x)))
+        table.setItem(row, col+3, QTableWidgetItem(str(item.y)))
+        table.setItem(row, col+4, QTableWidgetItem(str(item.z)))
 
     table.resizeColumnsToContents()
+    if use_icons:
+        table.setColumnWidth(0, 32)
     table.horizontalHeader().setStretchLastSection(True)
 
 
