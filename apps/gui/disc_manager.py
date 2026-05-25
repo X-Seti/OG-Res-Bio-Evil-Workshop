@@ -509,11 +509,14 @@ class DiscManagerDialog(QDialog): #vers 2
         disc_path = self.disc_edit.text().strip()
         if disc_path:
             self._save_recent_disc(disc_path)
-        # Pre-populate output folder in left panel if it already exists
+        # Check if already extracted
         out_dir = self._get_output_dir()
-        if os.path.isdir(out_dir):
-            self._log(f"Found existing extracted folder: {out_dir}")
+        if self._already_extracted():
+            self._log(f"Already extracted — loading: {out_dir}")
+            self._last_extracted_dir = out_dir
             self.stage_folder_ready.emit(out_dir)
+        elif os.path.isdir(out_dir):
+            self._log(f"Output folder exists but no RDTs found: {out_dir}")
 
     def _on_disc_error(self, msg: str): #vers 1
         self.open_btn.setEnabled(True)
@@ -773,10 +776,19 @@ class DiscManagerDialog(QDialog): #vers 2
         self._log(f"Extracted {len(items)} files to {out_dir}")
         self._offer_open_stage(out_dir)
 
-    def _extract_all_re_files(self): #vers 1
+    def _extract_all_re_files(self): #vers 2
         if not self._disc:
             return
-        out_dir  = self._get_output_dir()
+        out_dir = self._get_output_dir()
+
+        # Check already extracted
+        if self._already_extracted():
+            self._log(f"Already extracted: {out_dir}")
+            self._log("Skipping extraction - loading existing files into viewer.")
+            self._last_extracted_dir = out_dir
+            self._offer_open_stage(out_dir)
+            return
+
         re_files = [f for f in self._disc.list_files()
                     if os.path.splitext(f.name)[1].upper() in RE_EXTENSIONS]
         self.progress.setVisible(True)
@@ -795,10 +807,31 @@ class DiscManagerDialog(QDialog): #vers 2
         self._log(f"Extracted {done} RE files to {out_dir}")
         self._offer_open_stage(out_dir)
 
-    def _extract_all(self): #vers 1
+    def _already_extracted(self) -> bool: #vers 1
+        """Check if output folder already contains extracted RE files."""
+        out_dir = self._get_output_dir()
+        if not os.path.isdir(out_dir):
+            return False
+        # Walk looking for any RDT file - that confirms a real extraction
+        for root, dirs, files in os.walk(out_dir):
+            for fname in files:
+                if fname.upper().endswith('.RDT'):
+                    return True
+        return False
+
+    def _extract_all(self): #vers 2
         if not self._disc:
             return
         out_dir = self._get_output_dir()
+
+        # Check already extracted
+        if self._already_extracted():
+            self._log(f"Already extracted: {out_dir}")
+            self._log("Skipping extraction - loading existing files into viewer.")
+            self._last_extracted_dir = out_dir
+            self._offer_open_stage(out_dir)
+            return
+
         if isinstance(self._disc, ArchiveImage):
             extracted = self._disc.extract_archive_to(out_dir)
             self._log(f"Extracted {len(extracted)} files")
