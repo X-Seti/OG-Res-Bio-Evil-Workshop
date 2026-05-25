@@ -941,6 +941,39 @@ class DiscManagerDialog(QDialog): #vers 2
         if rf:
             rf.add_recent_disc(disc_path)
 
+    def _on_disc_list_context_menu(self, pos): #vers 1
+        """Right-click context menu on disc image list."""
+        item = self.disc_list.itemAt(pos)
+        if not item:
+            return
+        path = item.data(0, Qt.ItemDataRole.UserRole)
+        if not path:
+            return
+        menu = QMenu(self)
+        menu.addAction("Open", lambda: (
+            self.disc_edit.setText(path), self._open_disc()))
+        menu.addAction("Launch in Emulator", lambda: self._launch_disc(path))
+        menu.addAction("Open Folder", lambda: self._open_folder(os.path.dirname(path)))
+        menu.exec(self.disc_list.viewport().mapToGlobal(pos))
+
+    def _launch_disc(self, disc_path: str = ''): #vers 1
+        """Open launcher dialog for a disc image."""
+        try:
+            from apps.gui.launcher_dialog import LauncherDialog
+            disc = disc_path or self.disc_edit.text().strip()
+            out  = self._get_output_dir()
+            dlg  = LauncherDialog(self, disc_path=disc, folder_path=out)
+            dlg.show()
+        except Exception as e:
+            self._log(f"Launcher error: {e}", error=True)
+
+    def _open_folder(self, path: str = ''): #vers 1
+        """Open folder in system file manager."""
+        from apps.core.re_launchers import open_in_filemanager
+        target = path or self._get_output_dir()
+        ok, msg = open_in_filemanager(target)
+        self._log(msg, error=not ok)
+
     def _log(self, msg: str, error: bool = False): #vers 1
         color = "#cc6666" if error else "#aaaaaa"
         self.log_box.append(f'<span style="color:{color};">{msg}</span>')
