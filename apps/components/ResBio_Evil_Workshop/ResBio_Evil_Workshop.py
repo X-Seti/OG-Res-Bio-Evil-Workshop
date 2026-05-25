@@ -1691,6 +1691,15 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         self.export_all_btn.clicked.connect(self._open_disc_manager)
         layout.addWidget(self.export_all_btn)
 
+        self.play_btn = QPushButton("Play")
+        self.play_btn.setFont(self.button_font)
+        self.play_btn.setIcon(ResBioSVGIcons.view_icon())
+        self.play_btn.setIconSize(QSize(self.buticonsizex, self.buticonsizey))
+        self.play_btn.setEnabled(False)
+        self.play_btn.setToolTip("Launch game in emulator")
+        self.play_btn.clicked.connect(self._open_launcher)
+        layout.addWidget(self.play_btn)
+
         self.undo_btn = QPushButton("Undo")
         self.undo_btn.setFont(self.button_font)
         self.undo_btn.setIcon(ResBioSVGIcons.undo_icon())
@@ -1782,6 +1791,15 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             self._load_stage_folder(folder)
 
     def _load_stage_folder(self, folder_path: str): #vers 5
+        self._last_stage_folder = folder_path
+        if hasattr(self, 'play_btn'):
+            self.play_btn.setEnabled(True)
+        # Also update launcher if open
+        if hasattr(self, '_launcher_dialog') and self._launcher_dialog:
+            try:
+                self._launcher_dialog.folder_edit.setText(folder_path)
+            except Exception:
+                pass
         """Load stage folder - walks subdirs to find all RDTs.
         Handles both flat folders and disc-extracted trees like /PSX/STAGE1/.
         """
@@ -5009,6 +5027,20 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         except ValueError:
             idx = 0
         self.display_mode_combo.setCurrentText(modes[idx])
+
+    def _open_launcher(self): #vers 1
+        """Open game launcher dialog."""
+        try:
+            from apps.gui.launcher_dialog import LauncherDialog
+            disc   = getattr(self, '_last_disc_path', '')
+            folder = getattr(self, '_last_stage_folder', '')
+            if not hasattr(self, '_launcher_dialog') or not self._launcher_dialog:
+                self._launcher_dialog = LauncherDialog(self, disc, folder)
+            self._launcher_dialog.show()
+            self._launcher_dialog.raise_()
+        except Exception as e:
+            img_debugger.error(f"Launcher error: {e}")
+            QMessageBox.critical(self, "Error", str(e))
 
     def _open_disc_manager(self): #vers 2
         """Open the disc image manager dialog."""

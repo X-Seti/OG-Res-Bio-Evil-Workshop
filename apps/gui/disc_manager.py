@@ -238,6 +238,8 @@ class DiscManagerDialog(QDialog): #vers 2
         self.disc_list.header().resizeSection(1, 140)
         self.disc_list.header().resizeSection(2, 80)
         self.disc_list.itemDoubleClicked.connect(self._on_disc_double_clicked)
+        self.disc_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.disc_list.customContextMenuRequested.connect(self._on_disc_list_context_menu)
         layout.addWidget(self.disc_list)
 
         # Selected disc path
@@ -249,6 +251,12 @@ class DiscManagerDialog(QDialog): #vers 2
         self.open_btn.setMaximumWidth(60)
         self.open_btn.clicked.connect(self._open_disc)
         open_row.addWidget(self.open_btn)
+
+        launch_btn = QPushButton("Launch")
+        launch_btn.setMaximumWidth(65)
+        launch_btn.setToolTip("Launch disc in emulator")
+        launch_btn.clicked.connect(lambda: self._launch_disc())
+        open_row.addWidget(launch_btn)
 
         snapshot_btn = QPushButton("Snapshot")
         snapshot_btn.setMaximumWidth(80)
@@ -599,6 +607,9 @@ class DiscManagerDialog(QDialog): #vers 2
 
         menu.addAction("Extract RE Files", self._extract_all_re_files)
         menu.addAction("Extract All",      self._extract_all)
+        menu.addSeparator()
+        menu.addAction("Launch in Emulator", lambda: self._launch_disc())
+        menu.addAction("Open Extracted Folder", lambda: self._open_folder())
         menu.addSeparator()
         menu.addAction("Save Snapshot (JSON)", self._save_snapshot)
 
