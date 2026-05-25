@@ -19,7 +19,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont, QPixmap
 
 from apps.core.re1_formats import RDTFile, RDTItem, get_item_name
-from apps.core.re1_formats import RE2_ITEM_NAMES
+from apps.core.re1_formats import RE2_ITEM_NAMES, RE3_ITEM_NAMES
 
 ##Methods list -
 # load_item
@@ -187,10 +187,15 @@ class ItemEditDialog(QDialog): #vers 2
         btn_row.addWidget(cancel_btn)
         layout.addLayout(btn_row)
 
-    def _populate_type_combo(self): #vers 1
-        """Fill type dropdown with all known item names."""
+    def _populate_type_combo(self): #vers 2
+        """Fill type dropdown with all known item names for the correct game."""
         self.type_combo.clear()
-        names = RE2_ITEM_NAMES if self.game == 're2' else RE1_ITEM_NAMES
+        if self.game == 're3':
+            names = RE3_ITEM_NAMES
+        elif self.game == 're2':
+            names = RE2_ITEM_NAMES
+        else:
+            names = RE1_ITEM_NAMES
         for type_id in sorted(names.keys()):
             self.type_combo.addItem(
                 f"0x{type_id:02X}  {names[type_id]}", userData=type_id)

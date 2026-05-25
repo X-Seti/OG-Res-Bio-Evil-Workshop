@@ -206,27 +206,17 @@ ALL_ROOM_NAMES = {
 }
 
 
-def _extract_key(room_id: str) -> str: #vers 1
+def _extract_key(room_id: str) -> str: #vers 2
     """Extract the 3-char lookup key from a room_id string.
-    Handles RE1 (ROOM000), RE2 (ROOM11C0/ROOM11C1), RE3 (ROOM000).
-    Strips 'ROOM' prefix and trailing scenario digit for RE2.
+    Handles RE1 (ROOM000), RE2 (ROOM11C0/ROOM11C1), RE3 (ROOM0XX0).
     """
     name = room_id.upper().strip()
-    # Strip file extension if present
     if '.' in name:
         name = name.rsplit('.', 1)[0]
-    # Strip ROOM prefix
-    if name.startswith('ROOM'):
-        digits = name[4:]
-    else:
-        digits = name
-
-    # RE2 rooms end in 0 or 1 (scenario) and are 4 chars: e.g. "11C0"
-    # Strip trailing scenario digit if total length >= 4
+    digits = name[4:] if name.startswith('ROOM') else name
+    # Strip trailing scenario digit for RE2/RE3 (4+ char stems ending in 0/1)
     if len(digits) >= 4 and digits[-1] in ('0', '1'):
         digits = digits[:-1]
-
-    # Take last 3 chars as the key
     return digits[-3:] if len(digits) >= 3 else digits.zfill(3)
 
 

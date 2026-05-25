@@ -18,7 +18,7 @@ from PyQt6.QtGui import QFont
 
 from apps.core.re1_formats import (
     RDTFile, RDTEnemy, get_enemy_name,
-    RE1_ENEMY_NAMES, RE2_ENEMY_NAMES
+    RE1_ENEMY_NAMES, RE2_ENEMY_NAMES, RE3_ENEMY_NAMES
 )
 
 ##Methods list -
@@ -106,8 +106,13 @@ class EnemyEditDialog(QDialog): #vers 1
         btn_row.addWidget(cancel_btn)
         layout.addLayout(btn_row)
 
-    def _populate_type_combo(self): #vers 1
-        names = RE2_ENEMY_NAMES if self.game == 're2' else RE1_ENEMY_NAMES
+    def _populate_type_combo(self): #vers 2
+        if self.game == 're3':
+            names = RE3_ENEMY_NAMES
+        elif self.game == 're2':
+            names = RE2_ENEMY_NAMES
+        else:
+            names = RE1_ENEMY_NAMES
         for type_id in sorted(names.keys()):
             self.type_combo.addItem(
                 f"0x{type_id:02X}  {names[type_id]}", userData=type_id)

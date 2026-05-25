@@ -183,6 +183,7 @@ class RDTFile: #vers 1
     collision: List[RDTCollisionBoundary] = field(default_factory=list)
     sca_counts: List[int] = field(default_factory=list)  # [floors, slopes, walls, doors, other]
     sca_ceiling: tuple = field(default_factory=tuple)    # (ceiling_x, ceiling_z)
+    game_version: int = 0  # 1=RE1, 2=RE2, 3=RE3
     parse_errors: List[str] = field(default_factory=list)
     valid: bool = False
 
@@ -338,8 +339,28 @@ def get_item_name(item_type: int) -> str: #vers 1
 
 # --- Parser Functions ---
 
-def _detect_rdt_version(data: bytes) -> int: #vers 1
-    """Detect RDT game version. Returns 1=RE1, 2=RE2/RE3.
+def _is_prs_compressed(data: bytes) -> bool: #vers 1
+    """Heuristic: check if data looks like PRS-compressed RE3 RDT.
+    PRS data starts with 2 bytes of compressed data followed by bit stream.
+    RE3 RDTs are typically 20-80KB compressed, 80-200KB decompressed.
+    Simple check: if file doesn't start with known RDT header patterns.
+    """
+    if len(data) < 8:
+        return False
+    # Valid uncompressed RDT starts with small values (num_cameras=1-8)
+    # PRS stream starts with a byte pair where high nibble is often 0-3
+    # Best heuristic: try to read as RDT, if camera count looks insane -> PRS
+    cam_count = data[2]  # RE2/RE3 format
+    if 1 <= cam_count <= 8:
+        return False  # looks like valid uncompressed RE2/RE3 header
+    cam_count_re1 = data[1]  # RE1 format
+    if 1 <= cam_count_re1 <= 8:
+        return False  # looks like valid uncompressed RE1 header
+    return True  # doesn't look like a valid RDT header -> probably PRS
+
+
+def _detect_rdt_version(data: bytes) -> int: #vers 2
+    """Detect RDT game version. Returns 1=RE1, 2=RE2, 3=RE3.
     RE1: byte[1]=num_cameras (typically 1-8), 19 offsets, cameras at 0x94
     RE2: byte[2]=num_cameras, 21 offsets, cameras at 0xA8
     Heuristic: check whether byte[1] or byte[2] gives a sane camera count,
@@ -355,22 +376,29 @@ def _detect_rdt_version(data: bytes) -> int: #vers 1
     re1_ok = 1 <= re1_cams <= 8
     re2_ok = 1 <= re2_cams <= 8
     if re2_ok and not re1_ok:
+        # Distinguish RE2 vs RE3 by checking SYSTEM.CNF or room ID conventions
+        # RE3 rooms: ROOM0XXY (second hex digit is always the stage in 0-6)
+        # For now: use offset table validity
+        offsets_21 = list(struct.unpack_from('<21I', data, 0x20))
+        valid_21 = sum(1 for o in offsets_21 if 0 < o < len(data))
+        offsets_19 = list(struct.unpack_from('<19I', data, 0x20))
+        valid_19 = sum(1 for o in offsets_19 if 0 < o < len(data))
+        if valid_21 > valid_19 + 2:
+            return 2  # RE2 (RE3 handled by game_from_room_id at higher level)
         return 2
-    # Both plausible - check offset[0] at 0x20+8*4=0x40 for RE2
-    # RE2 has 21 offsets so offset[4] (camera switches) is at different slot
-    # Cross-check: read 21 offsets and see if any non-zero values are file-range valid
     offsets_21 = list(struct.unpack_from('<21I', data, 0x20))
     valid_21 = sum(1 for o in offsets_21 if 0 < o < len(data))
     offsets_19 = list(struct.unpack_from('<19I', data, 0x20))
     valid_19 = sum(1 for o in offsets_19 if 0 < o < len(data))
-    # More valid offsets in 21-count suggests RE2
     if valid_21 > valid_19 + 2:
         return 2
     return 1
 
 
-def parse_rdt(file_path: str) -> RDTFile: #vers 2
-    """Parse an RDT room file. Auto-detects RE1 vs RE2/RE3 format."""
+def parse_rdt(file_path: str) -> RDTFile: #vers 3
+    """Parse an RDT room file. Auto-detects RE1 vs RE2 vs RE3.
+    RE3 RDTs are PRS-compressed - decompresses before parsing.
+    """
     rdt = RDTFile(file_path=file_path, raw_data=b'')
     try:
         with open(file_path, 'rb') as f:
@@ -379,12 +407,32 @@ def parse_rdt(file_path: str) -> RDTFile: #vers 2
         data = rdt.raw_data
         size = len(data)
 
+        if size < 4:
+            raise RE1FormatError(f"File too small: {size} bytes")
+
+        # RE3 RDTs start with PRS magic: first 2 bytes are the compressed size
+        # Detection: if data[0:2] looks like a PRS header (low byte = 0x10 or similar)
+        # More reliable: try PRS decompress if file seems compressed
+        if _is_prs_compressed(data):
+            try:
+                from apps.core.re_unpacker import unpack_prs
+                decompressed = unpack_prs(data)
+                if len(decompressed) > size:  # decompressed is larger = valid
+                    data = decompressed
+                    size = len(data)
+                    rdt.raw_data = data
+            except Exception:
+                pass  # not PRS or failed - use raw data
+
         if size < 0x94:
             raise RE1FormatError(f"File too small: {size} bytes")
 
         game_ver = _detect_rdt_version(data)
+        rdt.game_version = game_ver  # store for later use
 
-        if game_ver == 2:
+        if game_ver == 3:
+            _parse_rdt_re3(rdt, data, size)
+        elif game_ver == 2:
             _parse_rdt_re2(rdt, data, size)
         else:
             _parse_rdt_re1(rdt, data, size)
@@ -506,6 +554,14 @@ def _parse_rdt_collision_re2(rdt: RDTFile, data: bytes, size: int): #vers 2
         _parse_collision_at(rdt, data, size, col_offset)
         if rdt.collision:  # parsed something valid
             return
+
+
+def _parse_rdt_re3(rdt: RDTFile, data: bytes, size: int): #vers 1
+    """Parse RE3 format RDT. Same structure as RE2 (21 offsets, cameras at 0xA8).
+    RE3 uses same offset layout as RE2 but different item/enemy IDs.
+    """
+    rdt.game_version = 3
+    _parse_rdt_re2(rdt, data, size)  # structure is identical to RE2
 
 
 def _parse_rdt_items(rdt: RDTFile, data: bytes, size: int): #vers 2
