@@ -1896,9 +1896,6 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         if file_path:
             self._load_rdt(file_path)
 
-        # (col_list_widget created in _create_left_panel)
-        return panel
-
     def _create_middle_panel(self): #ver 2
         panel = QFrame()
         panel.setFrameStyle(QFrame.Shape.StyledPanel)

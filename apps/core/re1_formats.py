@@ -400,41 +400,67 @@ def _parse_rdt_re2(rdt: RDTFile, data: bytes, size: int): #vers 1
             unknown=list(vals[8:11]),
         ))
 
-    # RE2 items at offset[1] (collision index differs)
-    # RE2 item struct: x(2)y(2)z(2)rot(2)type(1)flags(1)amount(1)scenario(1) = 12 bytes
-    _parse_rdt_items(rdt, data, size)
-    # RE2 collision at offset[3] (not offset[1])
+    # RE2 offset table (21 entries):
+    #  [2]=collision(SCA), [5]=items/AOT, [2]=cameras already handled
+    _parse_rdt_items_re2(rdt, data, size)
     _parse_rdt_collision_re2(rdt, data, size)
 
 
-def _parse_rdt_collision_re2(rdt: RDTFile, data: bytes, size: int): #vers 1
-    """Parse collision from RE2 RDT where collision is at offset[3]."""
-    if not rdt.header or len(rdt.header.offsets) < 4:
-        return
-    col_offset = rdt.header.offsets[3]
-    if col_offset == 0 or col_offset >= size:
-        # Try offset[1] as fallback
-        if len(rdt.header.offsets) > 1:
-            col_offset = rdt.header.offsets[1]
-        if col_offset == 0 or col_offset >= size:
-            return
-    _parse_collision_at(rdt, data, size, col_offset)
-
-
-def _parse_rdt_items(rdt: RDTFile, data: bytes, size: int): #vers 1
-    """Parse item placement data from RDT offset[2]."""
+def _parse_rdt_collision_re2(rdt: RDTFile, data: bytes, size: int): #vers 2
+    """Parse collision from RE2 RDT.
+    RE2 offset table: [2]=collision(SCA), not [3] as previously assumed.
+    Tries offset[2] first, then [1] and [3] as fallbacks.
+    """
     if not rdt.header or len(rdt.header.offsets) < 3:
         return
+    # Try offset[2] (correct for RE2)
+    for idx in [2, 1, 3]:
+        if idx >= len(rdt.header.offsets):
+            continue
+        col_offset = rdt.header.offsets[idx]
+        if col_offset == 0 or col_offset >= size:
+            continue
+        # Quick sanity: SCA header starts with ceiling_x, ceiling_z (2 bytes each)
+        # followed by 5 uint32 counts - check total looks plausible
+        if col_offset + 24 > size:
+            continue
+        counts = list(struct.unpack_from('<5I', data, col_offset + 4))
+        total = sum(counts)
+        if total > 500:  # unreasonable boundary count
+            continue
+        _parse_collision_at(rdt, data, size, col_offset)
+        if rdt.collision:  # parsed something valid
+            return
 
+
+def _parse_rdt_items(rdt: RDTFile, data: bytes, size: int): #vers 2
+    """Parse item placement data from RDT offset[2] (RE1)."""
+    if not rdt.header or len(rdt.header.offsets) < 3:
+        return
     item_offset = rdt.header.offsets[2]
+    _parse_items_at(rdt, data, size, item_offset)
+
+
+def _parse_rdt_items_re2(rdt: RDTFile, data: bytes, size: int): #vers 1
+    """Parse item placement data from RDT offset[5] (RE2/RE3).
+    RE2 AOT/item data is at offset index 5, not 2.
+    RE2 item struct adds a scenario byte: x(2)y(2)z(2)rot(2)type(1)flags(1)amount(1)scenario(1)
+    """
+    if not rdt.header or len(rdt.header.offsets) < 6:
+        return
+    item_offset = rdt.header.offsets[5]
+    _parse_items_at(rdt, data, size, item_offset)
+
+
+def _parse_items_at(rdt: RDTFile, data: bytes, size: int,
+                    item_offset: int): #vers 1
+    """Shared item parser at a given offset."""
     if item_offset == 0 or item_offset >= size:
         return
 
-    # Item entries are 12 bytes each
-    # Layout: x(2) y(2) z(2) rot(2) type(1) flags(1) amount(1) pad(1)
     item_struct_size = 12
     off = item_offset
-    max_items = 64
+    max_items = 128  # raised from 64 - RE2 rooms can have many items
 
     for i in range(max_items):
         if off + item_struct_size > size:
@@ -443,16 +469,16 @@ def _parse_rdt_items(rdt: RDTFile, data: bytes, size: int): #vers 1
         item_type = vals[4]
         if item_type == 0xFF:  # terminator
             break
-        item = RDTItem(
-            x=vals[0],
-            y=vals[1],
-            z=vals[2],
+        # Sanity check: item_type 0 with all zeros is padding, not a real item
+        if item_type == 0 and vals[0] == 0 and vals[1] == 0 and vals[2] == 0:
+            break
+        rdt.items.append(RDTItem(
+            x=vals[0], y=vals[1], z=vals[2],
             rotation=vals[3],
             item_type=item_type,
             flags=vals[5],
             amount=vals[6],
-        )
-        rdt.items.append(item)
+        ))
         off += item_struct_size
 
 
