@@ -288,6 +288,48 @@ def get_room_summary_text(rdt: RDTFile) -> str: #vers 1
 
 # --- Internal helpers ---
 
+def populate_enemies_table(main_window, rdt: RDTFile): #vers 1
+    """Populate middle table with enemy placement data."""
+    from apps.core.re_room_names import get_game_from_room_id
+    from apps.core.re1_formats import get_enemy_name
+    game  = get_game_from_room_id(rdt.room_id)
+    table = main_window.middle_list
+    table.setColumnCount(6)
+    table.setHorizontalHeaderLabels(
+        ["Enemy", "Type", "X", "Y", "Z", "Floor"])
+    table.setRowCount(len(rdt.enemies))
+    for row, enemy in enumerate(rdt.enemies):
+        name = get_enemy_name(enemy.enemy_type, game)
+        table.setItem(row, 0, QTableWidgetItem(name))
+        table.setItem(row, 1, QTableWidgetItem(f"0x{enemy.enemy_type:02X}"))
+        table.setItem(row, 2, QTableWidgetItem(str(enemy.x)))
+        table.setItem(row, 3, QTableWidgetItem(str(enemy.y)))
+        table.setItem(row, 4, QTableWidgetItem(str(enemy.z)))
+        table.setItem(row, 5, QTableWidgetItem(str(enemy.floor)))
+    table.resizeColumnsToContents()
+    table.horizontalHeader().setStretchLastSection(True)
+
+
+def populate_aot_table(main_window, rdt: RDTFile): #vers 1
+    """Populate middle table with AOT trigger data."""
+    from apps.core.re1_formats import AOT_TYPE_NAMES
+    table = main_window.middle_list
+    table.setColumnCount(6)
+    table.setHorizontalHeaderLabels(
+        ["Type", "X", "Z", "W", "D", "Floor"])
+    table.setRowCount(len(rdt.aot))
+    for row, aot in enumerate(rdt.aot):
+        type_name = AOT_TYPE_NAMES.get(aot.aot_type, f"0x{aot.aot_type:02X}")
+        table.setItem(row, 0, QTableWidgetItem(type_name))
+        table.setItem(row, 1, QTableWidgetItem(str(aot.x)))
+        table.setItem(row, 2, QTableWidgetItem(str(aot.z)))
+        table.setItem(row, 3, QTableWidgetItem(str(aot.w)))
+        table.setItem(row, 4, QTableWidgetItem(str(aot.d)))
+        table.setItem(row, 5, QTableWidgetItem(str(aot.floor)))
+    table.resizeColumnsToContents()
+    table.horizontalHeader().setStretchLastSection(True)
+
+
 def _camera_summary(rdt: RDTFile) -> str: #vers 1
     if not rdt.cameras:
         return ""

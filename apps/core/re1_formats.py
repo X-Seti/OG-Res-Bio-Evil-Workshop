@@ -25,6 +25,9 @@ from typing import List, Optional, Tuple
 ##class RDTHeader:
 ##class RDTCamera:
 ##class RDTItem:
+##class RDTEnemy:
+##class RDTAot:
+##class RDTCameraSwitch:
 ##class RDTCollisionBoundary:
 ##class RDTFile:
 ##class TIMHeader:
@@ -81,6 +84,69 @@ class RDTItem: #vers 1
 
 
 @dataclass
+class RDTEnemy: #vers 1
+    """Enemy placement entry from RDT enemy table."""
+    enemy_type: int    # enemy model/AI type
+    x: int
+    y: int
+    z: int
+    rotation: int      # direction (0-0xFFFF)
+    id: int            # unique id in room
+    num: int           # spawn group / condition number
+    floor: int
+    sound_bank: int
+    effect_bank: int
+    flags: int = 0
+
+    @property
+    def pos(self) -> tuple:
+        return (self.x, self.y, self.z)
+
+
+@dataclass
+class RDTAot: #vers 1
+    """Area Of Trigger - rectangles on the floor that trigger actions.
+    Types: 0=none, 1=door, 2=item, 3=event, 4=player, 5=auto, 6=message
+    """
+    aot_type: int      # trigger type
+    x: int             # centre x
+    z: int             # centre z
+    w: int             # width
+    d: int             # depth
+    floor: int
+    super_type: int    # broad category
+    data: bytes        # 8 bytes of type-specific data
+
+    @property
+    def x1(self) -> int: return self.x - self.w // 2
+    @property
+    def z1(self) -> int: return self.z - self.d // 2
+    @property
+    def x2(self) -> int: return self.x + self.w // 2
+    @property
+    def z2(self) -> int: return self.z + self.d // 2
+
+    @property
+    def is_door(self) -> bool:  return self.aot_type == 1
+    @property
+    def is_item(self) -> bool:  return self.aot_type == 2
+    @property
+    def is_event(self) -> bool: return self.aot_type == 3
+
+
+@dataclass
+class RDTCameraSwitch: #vers 1
+    """Camera switch zone - rectangle that changes active camera."""
+    from_cam: int      # camera active when entering this zone
+    to_cam: int        # camera to switch to
+    x1: int
+    z1: int
+    x2: int
+    z2: int
+    floor: int
+
+
+@dataclass
 class RDTCollisionBoundary: #vers 1
     boundary_type: int
     x1: int
@@ -111,6 +177,9 @@ class RDTFile: #vers 1
     header: Optional[RDTHeader] = None
     cameras: List[RDTCamera] = field(default_factory=list)
     items: List[RDTItem] = field(default_factory=list)
+    enemies: List[RDTEnemy] = field(default_factory=list)
+    aot: List[RDTAot] = field(default_factory=list)
+    camera_switches: List[RDTCameraSwitch] = field(default_factory=list)
     collision: List[RDTCollisionBoundary] = field(default_factory=list)
     sca_counts: List[int] = field(default_factory=list)  # [floors, slopes, walls, doors, other]
     sca_ceiling: tuple = field(default_factory=tuple)    # (ceiling_x, ceiling_z)
@@ -361,6 +430,9 @@ def _parse_rdt_re1(rdt: RDTFile, data: bytes, size: int): #vers 1
 
     _parse_rdt_items(rdt, data, size)
     _parse_rdt_collision(rdt, data, size)
+    _parse_rdt_enemies_re1(rdt, data, size)
+    _parse_rdt_aot_re1(rdt, data, size)
+    _parse_rdt_camera_switches(rdt, data, size)
 
 
 def _parse_rdt_re2(rdt: RDTFile, data: bytes, size: int): #vers 1
@@ -404,6 +476,9 @@ def _parse_rdt_re2(rdt: RDTFile, data: bytes, size: int): #vers 1
     #  [2]=collision(SCA), [5]=items/AOT, [2]=cameras already handled
     _parse_rdt_items_re2(rdt, data, size)
     _parse_rdt_collision_re2(rdt, data, size)
+    _parse_rdt_enemies_re2(rdt, data, size)
+    _parse_rdt_aot_re2(rdt, data, size)
+    _parse_rdt_camera_switches(rdt, data, size)
 
 
 def _parse_rdt_collision_re2(rdt: RDTFile, data: bytes, size: int): #vers 2

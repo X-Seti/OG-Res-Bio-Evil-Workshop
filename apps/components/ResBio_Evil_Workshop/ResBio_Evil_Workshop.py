@@ -4516,6 +4516,26 @@ class ResBioEvilWorkshop(QWidget): #ver 1
                 populate_items_table(self, self.current_rdt)
                 self.middle_list.selectRow(item_index)
 
+    def _on_map_enemy_selected(self, enemy_index: int): #vers 1
+        """Enemy clicked on room map - open edit dialog."""
+        if not self.current_rdt:
+            return
+        try:
+            from apps.gui.enemy_edit_dialog import EnemyEditDialog
+            from apps.core.re_room_names import get_game_from_room_id
+            game = get_game_from_room_id(self.current_rdt.room_id)
+            dlg = EnemyEditDialog(self.current_rdt, enemy_index, game, self)
+            dlg.enemy_changed.connect(self._on_enemy_changed)
+            dlg.exec()
+        except Exception as e:
+            img_debugger.error(f"Enemy edit error: {e}")
+
+    def _on_enemy_changed(self, enemy_index: int): #vers 1
+        """Enemy was edited - refresh map."""
+        if hasattr(self, 'room_map_editor') and self.room_map_editor:
+            self.room_map_editor.map_editor.update()
+        self.save_btn.setEnabled(True)
+
     def _on_map_camera_selected(self, camera_index: int): #vers 1
         """Handle camera selection from the room map editor."""
         if not hasattr(self, 'current_rdt') or not self.current_rdt:

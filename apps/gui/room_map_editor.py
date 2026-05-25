@@ -50,6 +50,13 @@ COL_CAMERA        = QColor(255, 200, 50, 230)
 COL_CAMERA_LINE   = QColor(255, 200, 50, 100)
 COL_ITEM          = QColor(80, 220, 80, 230)
 COL_ITEM_SEL      = QColor(255, 100, 100, 255)
+COL_ENEMY         = QColor(220, 60,  60,  230)   # red
+COL_ENEMY_SEL     = QColor(255, 150, 50,  255)   # orange
+COL_AOT_DOOR      = QColor(220, 140, 40,  180)   # orange
+COL_AOT_ITEM      = QColor(200, 220, 40,  180)   # yellow-green
+COL_AOT_EVENT     = QColor(80,  140, 220, 180)   # blue
+COL_AOT_DEFAULT   = QColor(150, 150, 150, 140)   # grey
+COL_CAM_SWITCH    = QColor(40,  200, 180, 140)   # teal
 COL_BACKGROUND    = QColor(20, 22, 26)
 COL_TEXT          = QColor(200, 200, 200)
 COL_AXIS          = QColor(100, 100, 100, 150)
@@ -196,6 +203,15 @@ class RoomMapEditor(QWidget): #vers 1
         if self.show_items:
             self._draw_items(painter)
 
+        if self.show_aot:
+            self._draw_aot(painter)
+
+        if self.show_enemies:
+            self._draw_enemies(painter)
+
+        if self.show_cam_switches:
+            self._draw_cam_switches(painter)
+
         self._draw_scale_bar(painter)
         self._draw_room_label(painter)
 
@@ -318,6 +334,97 @@ class RoomMapEditor(QWidget): #vers 1
             short = name[:12] + ".." if len(name) > 12 else name
             painter.drawText(sx + r + 2, sz + 4, short)
 
+    def _draw_enemies(self, painter: QPainter): #vers 1
+        """Draw enemy positions as red skull markers."""
+        if not self.rdt or not self.rdt.enemies:
+            return
+        from apps.core.re1_formats import get_enemy_name
+        from apps.core.re_room_names import get_game_from_room_id
+        game = get_game_from_room_id(self.rdt.room_id)
+
+        for i, enemy in enumerate(self.rdt.enemies):
+            sx, sz = self._room_to_screen(enemy.x, enemy.z)
+            selected = (i == self._selected_enemy)
+            color = COL_ENEMY_SEL if selected else COL_ENEMY
+            r = 8 + (2 if selected else 0)
+
+            # Draw as X marker
+            painter.setPen(QPen(color, 2))
+            painter.drawLine(sx-r, sz-r, sx+r, sz+r)
+            painter.drawLine(sx+r, sz-r, sx-r, sz+r)
+
+            # Outer circle
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawEllipse(QPoint(sx, sz), r, r)
+
+            # Label
+            if self._zoom >= 0.04:
+                name = get_enemy_name(enemy.enemy_type, game)
+                short = name[:12] + '..' if len(name) > 12 else name
+                painter.setFont(QFont("Courier New", max(6, int(7*self._zoom))))
+                painter.setPen(QPen(color))
+                painter.drawText(sx + r + 2, sz + 4, short)
+
+    def _draw_aot(self, painter: QPainter): #vers 1
+        """Draw AOT trigger zones as dashed rectangles."""
+        if not self.rdt or not self.rdt.aot:
+            return
+        for i, aot in enumerate(self.rdt.aot):
+            if aot.aot_type == 0:
+                continue
+            # Colour by type
+            if aot.is_door:
+                color = COL_AOT_DOOR
+                label = "Door"
+            elif aot.is_item:
+                color = COL_AOT_ITEM
+                label = "Item"
+            elif aot.is_event:
+                color = COL_AOT_EVENT
+                label = "Event"
+            else:
+                color = COL_AOT_DEFAULT
+                label = f"AOT{aot.aot_type}"
+
+            sx1, sz1 = self._room_to_screen(aot.x1, aot.z1)
+            sx2, sz2 = self._room_to_screen(aot.x2, aot.z2)
+            rect = QRect(min(sx1,sx2), min(sz1,sz2),
+                         abs(sx2-sx1), abs(sz2-sz1))
+            if rect.width() < 2 or rect.height() < 2:
+                continue
+
+            # Dashed outline
+            painter.setBrush(QBrush(QColor(color.red(), color.green(),
+                                           color.blue(), 40)))
+            painter.setPen(QPen(color, 1, Qt.PenStyle.DashLine))
+            painter.drawRect(rect)
+
+            # Label in centre
+            if self._zoom >= 0.04 and rect.width() > 20:
+                painter.setFont(QFont("Courier New", max(6, int(6*self._zoom))))
+                painter.setPen(QPen(color))
+                painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, label)
+
+    def _draw_cam_switches(self, painter: QPainter): #vers 1
+        """Draw camera switch zones as teal dashed rectangles."""
+        if not self.rdt or not self.rdt.camera_switches:
+            return
+        for cs in self.rdt.camera_switches:
+            sx1, sz1 = self._room_to_screen(cs.x1, cs.z1)
+            sx2, sz2 = self._room_to_screen(cs.x2, cs.z2)
+            rect = QRect(min(sx1,sx2), min(sz1,sz2),
+                         abs(sx2-sx1), abs(sz2-sz1))
+            if rect.width() < 2:
+                continue
+            painter.setBrush(QBrush(QColor(40, 200, 180, 30)))
+            painter.setPen(QPen(COL_CAM_SWITCH, 1, Qt.PenStyle.DotLine))
+            painter.drawRect(rect)
+            if self._zoom >= 0.04 and rect.width() > 20:
+                painter.setFont(QFont("Courier New", max(5, int(6*self._zoom))))
+                painter.setPen(QPen(COL_CAM_SWITCH))
+                painter.drawText(rect, Qt.AlignmentFlag.AlignCenter,
+                                 f"C{cs.from_cam}→C{cs.to_cam}")
+
     def _draw_scale_bar(self, painter: QPainter): #vers 1
         """Draw a scale bar in the bottom-left corner."""
         bar_world = 1000  # 1000 RE units
@@ -349,6 +456,16 @@ class RoomMapEditor(QWidget): #vers 1
         painter.drawText(8, 30, f"Cams:{cam_count}  Items:{item_count}  Col:{col_count}")
 
     # --- Selection ---
+
+    def _find_enemy_at(self, sx: int, sy: int) -> Optional[int]: #vers 1
+        """Return enemy index under screen position."""
+        if not self.rdt:
+            return None
+        for i, enemy in enumerate(self.rdt.enemies):
+            ex, ez = self._room_to_screen(enemy.x, enemy.z)
+            if abs(sx - ex) <= 10 and abs(sy - ez) <= 10:
+                return i
+        return None
 
     def _find_item_at(self, sx: int, sy: int) -> Optional[int]: #vers 1
         """Return item index under screen position, or None."""
@@ -484,9 +601,12 @@ class RoomMapToolbar(QFrame): #vers 1
 
         self._add_btn("Fit [Home]",    self.map_editor.reset_view)
         self._add_toggle("Grid [G]",   lambda: self._toggle('show_grid'))
-        self._add_toggle("Col [B]",    lambda: self._toggle('show_collision'))
-        self._add_toggle("Cams [C]",   lambda: self._toggle_cameras())
-        self._add_toggle("Items [I]",  lambda: self._toggle('show_items'))
+        self._add_toggle("Col [B]",     lambda: self._toggle('show_collision'))
+        self._add_toggle("Cams [C]",    lambda: self._toggle_cameras())
+        self._add_toggle("Items [I]",   lambda: self._toggle('show_items'))
+        self._add_toggle("Enemies [E]", lambda: self._toggle('show_enemies'))
+        self._add_toggle("Triggers [T]",lambda: self._toggle('show_aot'))
+        self._add_toggle("CamZones [Z]",lambda: self._toggle('show_cam_switches'))
 
         layout.addStretch()
 
