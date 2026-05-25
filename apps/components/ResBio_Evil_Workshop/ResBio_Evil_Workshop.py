@@ -68,13 +68,32 @@ def _is_standalone():
 
 STANDALONE_MODE = _is_standalone()
 
+# Load version - try multiple import paths since this file runs in both
+# standalone and docked modes with different sys.path configurations
+App_name    = "ResBio-Evil Workshop"
+App_version = "0.6"
+App_build   = "May 22 2026"
+App_auth    = "X-Seti"
+
 try:
-    from apps.version import APP_NAME as App_name, APP_VERSION as App_version, APP_BUILD as App_build, APP_AUTHOR as App_auth
+    from apps.version import APP_NAME as App_name, APP_VERSION as App_version,         APP_BUILD as App_build, APP_AUTHOR as App_auth
 except ImportError:
-    App_name    = "ResBio-Evil Workshop"
-    App_version = "0.6"
-    App_build   = "May 22 2026"
-    App_auth    = "X-Seti"
+    try:
+        import os as _os, sys as _sys
+        _ver_path = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
+                                  '..', '..', 'version.py')
+        _ver_path = _os.path.normpath(_ver_path)
+        if _os.path.exists(_ver_path):
+            import importlib.util as _ilu
+            _spec = _ilu.spec_from_file_location("version", _ver_path)
+            _ver  = _ilu.module_from_spec(_spec)
+            _spec.loader.exec_module(_ver)
+            App_name    = _ver.APP_NAME
+            App_version = _ver.APP_VERSION
+            App_build   = _ver.APP_BUILD
+            App_auth    = _ver.APP_AUTHOR
+    except Exception:
+        pass  # stay with defaults above
 
 
 # Conditional imports based on mode
