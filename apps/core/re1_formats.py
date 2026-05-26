@@ -333,7 +333,79 @@ RE1_ITEM_NAMES = { #vers 1
     0x50: "Document",
 }
 
-def get_item_name(item_type: int) -> str: #vers 1
+RE2_ITEM_NAMES: dict = {
+    0x00: "Nothing",          0x01: "Handgun",          0x02: "Shotgun",
+    0x03: "Magnum",           0x04: "Flamethrower",      0x05: "Sparkthrower",
+    0x06: "Rocket Launcher",  0x07: "Gatling Gun",       0x08: "Knife",
+    0x09: "Handgun Rounds",   0x0A: "Shotgun Shells",    0x0B: "Magnum Rounds",
+    0x0C: "Fuel",             0x0D: "Spark Rounds",      0x0E: "Explosive Rounds",
+    0x0F: "Ink Ribbon",       0x10: "First Aid Spray",   0x11: "Red Herb",
+    0x12: "Green Herb",       0x13: "Blue Herb",          0x14: "Mixed (R+G)",
+    0x15: "Mixed (R+G+B)",    0x16: "Mixed (G+B)",       0x17: "Mixed (G+G)",
+    0x18: "Mixed (G+G+B)",    0x19: "Mixed (G+G+G)",     0x1A: "Small Key",
+    0x1B: "Handcuffs",        0x1C: "Film A",             0x1D: "Film B",
+    0x1E: "Film C",           0x1F: "Film D",             0x20: "Unicorn Medal",
+    0x21: "Eagle Medal",      0x22: "Wolf Medal",         0x23: "Cog (small)",
+    0x24: "Cog (large)",      0x25: "Power Room Key",     0x26: "Manhole Opener",
+    0x27: "Main Fuse",        0x28: "Fuse Case",          0x29: "Vaccine Base",
+    0x2A: "Vaccine",          0x2B: "G-Virus",            0x2C: "Special Key",
+    0x2D: "Joint Plug",       0x2E: "Joint Plug (used)",  0x2F: "Permit",
+    0x30: "Armor Key",        0x31: "Locker Key",         0x32: "Basement Key",
+    0x33: "Spade Key",        0x34: "Diamond Key",        0x35: "Heart Key",
+    0x36: "Club Key",         0x37: "Rook Plug",          0x38: "Knight Plug",
+    0x39: "Bishop Plug",      0x3A: "Queen Plug",         0x3B: "King Plug",
+    0x3C: "Womens Statue",    0x3D: "Gold Cogwheel",      0x3E: "Aide Notebook",
+    0x3F: "Emblem",           0x40: "STARS Badge",        0x41: "T-Bar Tool",
+    0x42: "T-Bar (used)",     0x43: "Detonator",          0x44: "C4 Bomb",
+    0x45: "C4 Detonator",     0x46: "Cabin Key",          0x47: "Fancy Box",
+    0x48: "Ivory Comb",       0x49: "Fancy Box (open)",   0x4A: "Brass Compass",
+    0x4B: "Red Jewel",        0x4C: "Red Jewel (set)",    0x4D: "Green Jewel",
+    0x4E: "Green Jewel (set)",0x4F: "Blue Jewel",         0x50: "Blue Jewel (set)",
+    0x51: "Stone & Metal",    0x52: "Red Card Key",       0x53: "Blue Card Key",
+    0x54: "Patrol Report",    0x55: "Orders Document",    0x56: "Lab Conductor File",
+    0x57: "Instructions",     0x58: "Sewer Manager Fax",  0x59: "Trading Post Note",
+    0x5A: "Sewers Note",      0x5B: "Manager Diary",      0x5C: "Researcher Diary",
+    0x5D: "Williams Diary",   0x5E: "Map (Station)",      0x5F: "Map (Sewers)",
+    0x60: "Map (Lab)",        0x61: "Memo",               0x62: "Locker Room Note",
+    0x63: "Darkroom Note",    0x64: "Chief Mail",         0x65: "Map (Station 2F)",
+    0x66: "Map (Station 1F)",
+}
+
+RE3_ITEM_NAMES: dict = {
+    0x00: "Nothing",          0x01: "Handgun",           0x02: "Shotgun",
+    0x03: "Grenade Launcher", 0x04: "Rocket Launcher",   0x05: "Knife",
+    0x06: "Handgun Rounds",   0x07: "Shotgun Shells",    0x08: "Grenade Rounds",
+    0x09: "Flame Rounds",     0x0A: "Acid Rounds",       0x0B: "Freeze Rounds",
+    0x0C: "Mine Thrower",     0x0D: "Mine Thrower Ammo", 0x0E: "M37 Parts",
+    0x0F: "M37 Parts (2)",    0x10: "First Aid Spray",   0x11: "Red Herb",
+    0x12: "Green Herb",       0x13: "Blue Herb",          0x14: "Mixed (G+G)",
+    0x15: "Mixed (G+G+G)",    0x16: "Mixed (G+B)",       0x17: "Mixed (G+R)",
+    0x18: "Mixed (G+R+B)",    0x19: "Ink Ribbon",        0x20: "Emblem Key",
+    0x21: "Bronze Compass",   0x22: "Old Key",            0x23: "Rusted Key",
+    0x24: "Card Key",         0x25: "Facility Key",       0x26: "Warehouse Key",
+    0x27: "Oil Additive",     0x28: "Machine Oil",        0x29: "Gear",
+    0x2A: "Chronos Chain",    0x2B: "Chronos Gear",       0x2C: "Sickle",
+    0x2D: "Battery",          0x2E: "Detonator",          0x2F: "Powder (A)",
+    0x30: "Powder (B)",       0x31: "Powder (C)",         0x32: "Powder (A+A)",
+    0x33: "Powder (A+B)",     0x34: "Powder (B+B)",       0x35: "Powder (A+C)",
+    0x36: "Powder (B+C)",     0x37: "Vaccine",            0x38: "Vaccine Cart.",
+    0x39: "Vaccine Cart. (full)", 0x3A: "Vaccine Media",  0x3B: "System Disk",
+    0x3C: "Jewel Box",        0x3D: "Red Jewel",          0x3E: "Blue Jewel",
+    0x3F: "Memo",             0x40: "Hospital Map",       0x41: "Park Map",
+    0x42: "Downtown Map",
+}
+
+
+def get_item_name(item_type: int, game: str = 're1') -> str: #vers 3
+    """Return item name for type and game. game='re1'|'re2'|'re3'."""
+    import sys as _sys
+    _m = _sys.modules[__name__]
+    if game == 're3':
+        return getattr(_m, 'RE3_ITEM_NAMES', {}).get(
+            item_type, f"Unknown (0x{item_type:02X})")
+    if game == 're2':
+        return getattr(_m, 'RE2_ITEM_NAMES', {}).get(
+            item_type, f"Unknown (0x{item_type:02X})")
     return RE1_ITEM_NAMES.get(item_type, f"Unknown (0x{item_type:02X})")
 
 
@@ -357,6 +429,63 @@ def _is_prs_compressed(data: bytes) -> bool: #vers 1
     if 1 <= cam_count_re1 <= 8:
         return False  # looks like valid uncompressed RE1 header
     return True  # doesn't look like a valid RDT header -> probably PRS
+
+
+def _detect_version_from_path(file_path: str, data: bytes) -> int: #vers 2
+    """Detect RDT version using filename + folder structure + header.
+    Most reliable method - uses actual path context.
+    
+    RE1 PC:  Stage1/ROOM1xxx.RDT   (folder named StageN, no DATA parent)
+    RE2 PC:  DATA/ROOMxxxx.RDT     (parent folder = DATA, has .ADT files)
+    RE3 PC:  DATA/STAGE/ROOMxx.RDT (STAGE subfolder inside DATA)
+    RE1 PS1: PSX/STAGE1/ROOM0xx.RDT
+    RE2 PS1: PSX/STAGE1/ROOM11C0.RDT (4-char with scenario digit)
+    """
+    import os
+    path_up  = file_path.upper()
+    fname    = os.path.splitext(os.path.basename(file_path))[0].upper()
+    folder   = os.path.dirname(file_path)
+    folder_n = os.path.basename(folder).upper()
+    parent   = os.path.dirname(folder)
+    parent_n = os.path.basename(parent).upper()
+
+    # RE3 PC: DATA/STAGE/ subfolder (folder name starts with STAGE, parent is DATA)
+    if folder_n.startswith('STAGE') and parent_n == 'DATA':
+        return 3
+
+    # RE2 PC: directly in DATA/ folder
+    if folder_n == 'DATA' or parent_n == 'DATA':
+        # Check siblings for ADT (RE2) or ROFS (RE3)
+        check_dir = folder if folder_n == 'DATA' else parent
+        try:
+            sibs = os.listdir(check_dir)
+            if any(s.upper().startswith('ROFS') for s in sibs):
+                return 3
+            if any(s.upper().endswith('.ADT') for s in sibs):
+                return 2
+        except OSError:
+            pass
+        return 2  # DATA folder = RE2 PC
+
+    # Room filename analysis
+    if fname.startswith('ROOM'):
+        digits = fname[4:]
+        # 3 chars = RE1 (ROOM000-ROOM3FF)
+        if len(digits) == 3:
+            return 1
+        # 4 chars ending 0/1: could be RE2 PS1/PC (scenario) or RE1 PC (decimal)
+        if len(digits) == 4 and digits[-1] in ('0','1'):
+            # RE1 PC uses StageN parent folder, RE2 PS1 uses STAGE1 with PSX above
+            if folder_n.startswith('STAGE') and 'PSX' not in path_up:
+                # RE1 PC: Stage1/Stage2 etc - no PSX in path
+                return 1
+            return 2
+        # 4 chars NOT ending 0/1 = RE1 PC decimal (ROOM1020 etc)
+        if len(digits) == 4:
+            return 1
+
+    # Fall back to header analysis
+    return _detect_rdt_version(data)
 
 
 def _detect_rdt_version(data: bytes) -> int: #vers 2
@@ -395,10 +524,8 @@ def _detect_rdt_version(data: bytes) -> int: #vers 2
     return 1
 
 
-def parse_rdt(file_path: str) -> RDTFile: #vers 3
-    """Parse an RDT room file. Auto-detects RE1 vs RE2 vs RE3.
-    RE3 RDTs are PRS-compressed - decompresses before parsing.
-    """
+def parse_rdt(file_path: str) -> RDTFile: #vers 4
+    """Parse an RDT room file. Uses filename + header heuristics to detect version."""
     rdt = RDTFile(file_path=file_path, raw_data=b'')
     try:
         with open(file_path, 'rb') as f:
@@ -410,25 +537,24 @@ def parse_rdt(file_path: str) -> RDTFile: #vers 3
         if size < 4:
             raise RE1FormatError(f"File too small: {size} bytes")
 
-        # RE3 RDTs start with PRS magic: first 2 bytes are the compressed size
-        # Detection: if data[0:2] looks like a PRS header (low byte = 0x10 or similar)
-        # More reliable: try PRS decompress if file seems compressed
+        # Decompress PRS if needed (RE3 PS1 RDTs are PRS-compressed)
         if _is_prs_compressed(data):
             try:
                 from apps.core.re_unpacker import unpack_prs
                 decompressed = unpack_prs(data)
-                if len(decompressed) > size:  # decompressed is larger = valid
+                if len(decompressed) > size:
                     data = decompressed
                     size = len(data)
                     rdt.raw_data = data
             except Exception:
-                pass  # not PRS or failed - use raw data
+                pass
 
         if size < 0x94:
             raise RE1FormatError(f"File too small: {size} bytes")
 
-        game_ver = _detect_rdt_version(data)
-        rdt.game_version = game_ver  # store for later use
+        # Use filename to help detect version - much more reliable than heuristics
+        game_ver = _detect_version_from_path(file_path, data)
+        rdt.game_version = game_ver
 
         if game_ver == 3:
             _parse_rdt_re3(rdt, data, size)
