@@ -1830,12 +1830,49 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
         return panel
 
-    def _browse_stage_folder(self): #vers 1
-        """Open a folder of RDT files and populate the left panel list."""
+    def _browse_stage_folder(self, start_dir: str = ''): #vers 2
+        """Open a game folder and populate the left panel. Remembers last path."""
         from PyQt6.QtWidgets import QFileDialog
-        folder = QFileDialog.getExistingDirectory(self, "Open Stage Folder")
-        if folder:
-            self._load_stage_folder(folder)
+        # Start from last known path for this type of browse
+        if not start_dir:
+            start_dir = getattr(self, '_last_stage_folder', '') or                         (self._recent_files.get_game_paths() or {}).get('last', '')                         if hasattr(self, '_recent_files') and self._recent_files else ''
+        folder = QFileDialog.getExistingDirectory(
+            self, "Open Game Folder", start_dir)
+        if not folder:
+            return
+        self._load_stage_folder(folder)
+        # Save to recent game paths
+        if hasattr(self, '_recent_files') and self._recent_files:
+            from apps.core.re_launchers import identify_folder
+            ver, plat = identify_folder(folder)
+            label = f"{ver.value} ({plat.value})" if ver.value != 'Unknown'                     else os.path.basename(folder)
+            self._recent_files.add_game_path(label, folder)
+
+    def _show_recent_paths_menu(self): #vers 1
+        """Show dropdown of saved/recent game paths."""
+        from PyQt6.QtWidgets import QMenu
+        menu = QMenu(self)
+
+        paths = {}
+        if hasattr(self, '_recent_files') and self._recent_files:
+            paths = self._recent_files.get_game_paths()
+
+        if paths:
+            for label, path in paths.items():
+                act = menu.addAction(f"{label}  —  {os.path.basename(path)}")
+                act.setToolTip(path)
+                act.triggered.connect(
+                    lambda checked, p=path: self._load_stage_folder(p))
+            menu.addSeparator()
+
+        menu.addAction("Browse for folder...", self._browse_stage_folder)
+        menu.addAction("Clear saved paths",
+            lambda: self._recent_files.get_game_paths().clear()
+            if hasattr(self, '_recent_files') and self._recent_files else None)
+
+        btn = self.sender()
+        if btn:
+            menu.exec(btn.mapToGlobal(btn.rect().bottomLeft()))
 
     def _load_stage_folder(self, folder_path: str): #vers 6
         self._last_stage_folder = folder_path
@@ -1865,22 +1902,53 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             self.folder_path_label.setText(os.path.basename(folder_path))
             self.folder_path_label.setToolTip(folder_path)
 
-        # Walk subdirs to collect all RDTs and ARDs (RE1.5)
-        all_rdts = []
+        # All game-relevant file types
+        GAME_EXTS = {
+            '.RDT', '.ARD',                              # rooms
+            '.TIM', '.PAK', '.ADT', '.BSS', '.PIX',     # textures/backgrounds
+            '.EMD', '.PLD', '.PLW', '.IVM', '.TMD',     # models
+            '.VAG', '.WAV', '.SND', '.VB', '.HSB',      # audio
+            '.SCD',                                       # scripts
+        }
+        EXT_COLORS = {
+            '.RDT': '#6494d0', '.ARD': '#7494e0',
+            '.TIM': '#c8a050', '.PAK': '#c89050', '.ADT': '#b88040',
+            '.BSS': '#90b060', '.PIX': '#80a050',
+            '.EMD': '#80c880', '.PLD': '#70b870', '.PLW': '#60a860',
+            '.VAG': '#60c8c8', '.WAV': '#60c0c0', '.SND': '#50b0b0',
+            '.VB':  '#50a8a8', '.HSB': '#509898',
+        }
+
+        all_files = []
         for root, dirs, files in os.walk(folder_path):
             dirs.sort()
             for fname in sorted(files):
-                if fname.upper().endswith(('.RDT', '.ARD')):
-                    all_rdts.append(os.path.join(root, fname))
+                ext = os.path.splitext(fname)[1].upper()
+                if ext in GAME_EXTS:
+                    all_files.append(os.path.join(root, fname))
 
-        # Show in left panel with relative path as label
-        for full_path in all_rdts:
+        # Populate list with colour coding
+        for full_path in all_files:
+            ext = os.path.splitext(full_path)[1].upper()
             rel = os.path.relpath(full_path, folder_path)
             size = os.path.getsize(full_path)
             size_str = f"{size//1024}KB" if size > 1024 else f"{size}B"
-            item = QListWidgetItem(f"{rel}  ({size_str})")
-            item.setData(Qt.ItemDataRole.UserRole, full_path)
-            self.col_list_widget.addItem(item)
+            litem = QListWidgetItem(f"{rel}  ({size_str})")
+            litem.setData(Qt.ItemDataRole.UserRole, full_path)
+            color = EXT_COLORS.get(ext)
+            if color:
+                from PyQt6.QtGui import QColor
+                litem.setForeground(QColor(color))
+            self.col_list_widget.addItem(litem)
+
+        # Stats
+        all_rdts  = [f for f in all_files if os.path.splitext(f)[1].upper() in ('.RDT','.ARD')]
+        if hasattr(self, 'left_stats_label'):
+            self.left_stats_label.setText(
+                f"{len(all_files)} files  ({len(all_rdts)} rooms)")
+
+        self._all_left_files = all_files
+        self._left_folder    = folder_path
 
         rdt_files = [os.path.basename(p) for p in all_rdts]
 
