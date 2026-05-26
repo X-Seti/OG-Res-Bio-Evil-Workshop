@@ -48,15 +48,17 @@ class RE1FormatError(Exception): #vers 1
 # --- RDT Structures ---
 
 @dataclass
-class RDTCamera: #vers 1
-    masks_offset: int
-    tim_masks_offset: int
-    from_x: int
-    from_y: int
-    from_z: int
-    to_x: int
-    to_y: int
-    to_z: int
+class RDTCamera: #vers 2
+    masks_offset: int     = 0
+    tim_masks_offset: int = 0
+    from_x: int           = 0
+    from_y: int           = 0
+    from_z: int           = 0
+    to_x: int             = 0
+    to_y: int             = 0
+    to_z: int             = 0
+    camera_index: int     = 0
+    view_r: int           = 0   # screen projection height (ViewR from re1.h)
     unknown: List[int] = field(default_factory=list)
 
     @property
@@ -159,15 +161,15 @@ class RDTCollisionBoundary: #vers 1
 
 
 @dataclass
-class RDTHeader: #vers 1
-    unknown0: int
-    num_cameras: int
-    num_sound_banks: int
-    unknown1: bytes
-    offsets: List[int] = field(default_factory=list)  # 19 absolute offsets
+class RDTHeader: #vers 2
+    unknown0: int     = 0
+    num_cameras: int  = 0
+    num_sound_banks: int = 0
+    unknown1: bytes   = b''
+    offsets: List[int] = field(default_factory=list)
 
     OFFSET_COUNT = 19
-    HEADER_SIZE = 0x94  # Camera data starts here
+    HEADER_SIZE  = 0x94  # RE1 camera data starts here (RE2: 0x64)
 
 
 @dataclass
@@ -609,6 +611,10 @@ def parse_rdt(file_path: str) -> RDTFile: #vers 4
         game_ver = _detect_version_from_path(file_path, data)
         rdt.game_version = game_ver
 
+        # Always create header object before parsers try to use it
+        if rdt.header is None:
+            rdt.header = RDTHeader()
+
         if game_ver == 3:
             _parse_rdt_re3(rdt, data, size)
         elif game_ver == 2:
@@ -652,6 +658,8 @@ def _parse_rdt_re1(rdt: RDTFile, data: bytes, size: int): #vers 2
       0x94 Cut[nCut]   camera array, each RCUT = 44 bytes
            RCUT: pSp(4), pTim(4), View_p[3](12), View_r[3](12), Zero[2](8), ViewR(4)
     """
+    if rdt.header is None:
+        rdt.header = RDTHeader()
     if size < 0x94:
         rdt.parse_errors.append(f"File too small for RE1: {size} bytes")
         return
@@ -748,6 +756,8 @@ def _parse_rdt_re2(rdt: RDTFile, data: bytes, size: int): #vers 2
     """
     import struct as _s
 
+    if rdt.header is None:
+        rdt.header = RDTHeader()
     if size < 0x64:
         rdt.parse_errors.append(f"File too small for RE2: {size} bytes")
         return
