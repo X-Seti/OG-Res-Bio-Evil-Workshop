@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Tuple, Any
 
 from PyQt6.QtWidgets import (
+    QLineEdit, QComboBox,
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSplitter, QListWidget, QListWidgetItem, QLabel, QPushButton, QFileDialog, QMessageBox, QGroupBox, QFormLayout, QLineEdit, QTextEdit, QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView, QMenu, QDialog, QCheckBox, QSpinBox, QDoubleSpinBox, QComboBox, QTabWidget, QScrollArea, QFrame, QStackedWidget, QInputDialog, QProgressDialog)
 
 
@@ -1792,13 +1793,40 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         folder_row.addWidget(folder_open_btn)
         layout.addLayout(folder_row)
 
+        # Filter bar
+        filter_row = QHBoxLayout()
+        self.left_filter = QLineEdit()
+        self.left_filter.setPlaceholderText("Filter files...")
+        self.left_filter.setMaximumHeight(22)
+        self.left_filter.setFont(QFont("Courier New", 8))
+        self.left_filter.textChanged.connect(self._on_left_filter_changed)
+        filter_row.addWidget(self.left_filter)
+
+        # File type filter combo
+        self.left_type_combo = QComboBox()
+        self.left_type_combo.addItems(["All", "RDT", "TIM", "EMD", "WAV", "BSS", "PAK"])
+        self.left_type_combo.setMaximumWidth(60)
+        self.left_type_combo.setMaximumHeight(22)
+        self.left_type_combo.currentTextChanged.connect(self._on_left_type_filter_changed)
+        filter_row.addWidget(self.left_type_combo)
+        layout.addLayout(filter_row)
+
         # File list
         self.col_list_widget = QListWidget()
         self.col_list_widget.setAlternatingRowColors(True)
         self.col_list_widget.itemClicked.connect(self._on_left_file_selected)
         self.col_list_widget.itemDoubleClicked.connect(self._on_left_file_activated)
         self.col_list_widget.setFont(QFont("Courier New", 8))
+        self.col_list_widget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.col_list_widget.customContextMenuRequested.connect(
+            self._on_left_panel_context_menu)
         layout.addWidget(self.col_list_widget, stretch=1)
+
+        # Stats label
+        self.left_stats_label = QLabel("")
+        self.left_stats_label.setFont(QFont("Courier New", 7))
+        self.left_stats_label.setStyleSheet("color: #666;")
+        layout.addWidget(self.left_stats_label)
 
         return panel
 
@@ -1809,11 +1837,10 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         if folder:
             self._load_stage_folder(folder)
 
-    def _load_stage_folder(self, folder_path: str): #vers 5
+    def _load_stage_folder(self, folder_path: str): #vers 6
         self._last_stage_folder = folder_path
         if hasattr(self, 'play_btn'):
             self.play_btn.setEnabled(True)
-        # Also update launcher if open
         if hasattr(self, '_launcher_dialog') and self._launcher_dialog:
             try:
                 self._launcher_dialog.folder_edit.setText(folder_path)
@@ -1886,11 +1913,122 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         # Keep references alive
         self._stage_loader_refs = [(thread, loader)]
 
-    def _on_left_file_selected(self, item): #vers 2
-        """Single click: load the RDT file."""
+    def _on_left_file_selected(self, item): #vers 3
+        """Single click: route file to correct viewer by extension."""
         file_path = item.data(Qt.ItemDataRole.UserRole)
-        if file_path:
+        if not file_path:
+            return
+        ext = os.path.splitext(file_path)[1].upper()
+        if ext in ('.RDT', '.ARD'):
             self._load_rdt(file_path)
+        elif ext in ('.TIM', '.PAK', '.PIX', '.BSS', '.ADT'):
+            self.show_tim_file(file_path)
+            self.display_mode_combo.setCurrentText("Texture")
+        elif ext in ('.EMD', '.PLD', '.PLW', '.IVM', '.TMD'):
+            if hasattr(self, 'emd_viewer') and self.emd_viewer:
+                self.emd_viewer.load_emd_file(file_path)
+                self.display_mode_combo.setCurrentText("Model")
+        elif ext in ('.VAG', '.WAV', '.SND', '.VB', '.HSB'):
+            if hasattr(self, 'audio_player') and self.audio_player:
+                self.audio_player.load_file(file_path)
+
+    def _on_left_filter_changed(self, text: str): #vers 1
+        """Filter left panel by filename text."""
+        self._apply_left_filter()
+
+    def _on_left_type_filter_changed(self, ext_filter: str): #vers 1
+        """Filter left panel by file type."""
+        self._apply_left_filter()
+
+    def _apply_left_filter(self): #vers 1
+        """Apply text + type filter to left panel."""
+        try:
+            _ = self.col_list_widget.count()
+        except RuntimeError:
+            return
+        if not hasattr(self, '_all_left_files') or not self._all_left_files:
+            return
+
+        text = self.left_filter.text().lower() if hasattr(self, 'left_filter') else ''
+        ext_f = self.left_type_combo.currentText() if hasattr(self, 'left_type_combo') else 'All'
+        folder = getattr(self, '_left_folder', '')
+
+        EXT_COLORS = {
+            '.RDT': '#6494d0', '.ARD': '#7494e0',
+            '.TIM': '#c8a050', '.PAK': '#c89050', '.ADT': '#b88040',
+            '.BSS': '#90b060', '.EMD': '#80c880', '.PLD': '#70b870',
+            '.VAG': '#60c8c8', '.WAV': '#60c0c0', '.VB': '#50a8a8',
+        }
+
+        self.col_list_widget.clear()
+        count = 0
+        for full_path in self._all_left_files:
+            ext = os.path.splitext(full_path)[1].upper()
+            if ext_f != 'All' and ext != '.' + ext_f:
+                continue
+            rel = os.path.relpath(full_path, folder) if folder else full_path
+            if text and text not in rel.lower():
+                continue
+            size = os.path.getsize(full_path)
+            size_str = f"{size//1024}KB" if size > 1024 else f"{size}B"
+            item = QListWidgetItem(f"{rel}  ({size_str})")
+            item.setData(Qt.ItemDataRole.UserRole, full_path)
+            color = EXT_COLORS.get(ext)
+            if color:
+                from PyQt6.QtGui import QColor
+                item.setForeground(QColor(color))
+            self.col_list_widget.addItem(item)
+            count += 1
+        if hasattr(self, 'left_stats_label'):
+            self.left_stats_label.setText(f"{count} files shown")
+
+    def _on_left_panel_context_menu(self, pos): #vers 1
+        """Right-click context menu on left panel file list."""
+        item = self.col_list_widget.itemAt(pos)
+        if not item:
+            return
+        file_path = item.data(Qt.ItemDataRole.UserRole)
+        if not file_path:
+            return
+        ext = os.path.splitext(file_path)[1].upper()
+        from PyQt6.QtWidgets import QMenu
+        menu = QMenu(self)
+
+        if ext in ('.RDT', '.ARD'):
+            menu.addAction("Load Room", lambda: self._load_rdt(file_path))
+            menu.addAction("Export JSON", lambda: self._export_room_json_path(file_path))
+        elif ext in ('.TIM', '.PAK', '.PIX', '.BSS', '.ADT'):
+            menu.addAction("View Texture", lambda: (
+                self.show_tim_file(file_path),
+                self.display_mode_combo.setCurrentText("Texture")))
+        elif ext in ('.EMD', '.PLD', '.PLW'):
+            menu.addAction("View Model", lambda: (
+                self.emd_viewer.load_emd_file(file_path)
+                if hasattr(self, 'emd_viewer') and self.emd_viewer else None,
+                self.display_mode_combo.setCurrentText("Model")))
+        elif ext in ('.VAG', '.WAV', '.SND', '.VB', '.HSB'):
+            menu.addAction("Play Audio", lambda: (
+                self.audio_player.load_file(file_path)
+                if hasattr(self, 'audio_player') and self.audio_player else None))
+
+        menu.addSeparator()
+        menu.addAction("Open in File Manager", lambda: (
+            __import__('apps.core.re_launchers', fromlist=['open_in_filemanager'])
+            .open_in_filemanager(os.path.dirname(file_path))))
+        menu.exec(self.col_list_widget.viewport().mapToGlobal(pos))
+
+    def _export_room_json_path(self, file_path: str): #vers 1
+        """Export a specific RDT file to JSON."""
+        try:
+            from apps.core.re1_formats import parse_rdt
+            from apps.methods.rdt_loader import export_room_to_json
+            rdt = parse_rdt(file_path)
+            if rdt.valid:
+                out = file_path.replace('.RDT', '.json').replace('.ARD', '.json')
+                export_room_to_json(rdt, out)
+                img_debugger.debug(f"Exported: {out}")
+        except Exception as e:
+            img_debugger.error(f"Export error: {e}")
 
     def _on_floor_plan_room_clicked(self, room_id: str): #vers 1
         """Click on floor plan room area - load it and stay on floor plan."""
@@ -2812,7 +2950,8 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             self._show_settings_dialog_fallback()
     def _show_settings_dialog_fallback(self): #vers 1
         """Fallback built-in settings dialog (basic display/preview settings)"""
-        from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QTabWidget,
+        from PyQt6.QtWidgets import (
+    QLineEdit, QComboBox,QDialog, QVBoxLayout, QHBoxLayout, QTabWidget,
                                     QWidget, QLabel, QPushButton, QGroupBox,
                                     QCheckBox, QSpinBox, QFormLayout, QScrollArea,
                                     QComboBox, QMessageBox)
@@ -3380,7 +3519,8 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
     def _show_about_dialog(self): #vers 1
         """Show about/info dialog for ResBio-Evil-Workshop"""
-        from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QTabWidget, QWidget, QGroupBox, QFormLayout, QSpinBox, QComboBox, QSlider, QLabel, QCheckBox, QFontComboBox, QTextBrowser)
+        from PyQt6.QtWidgets import (
+    QLineEdit, QComboBox,QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QTabWidget, QWidget, QGroupBox, QFormLayout, QSpinBox, QComboBox, QSlider, QLabel, QCheckBox, QFontComboBox, QTextBrowser)
         from PyQt6.QtCore import Qt
         from PyQt6.QtGui import QFont
 
@@ -3935,7 +4075,8 @@ class ResBioEvilWorkshop(QWidget): #ver 1
 
     def _show_settings_hotkeys(self): #vers 1
         """Show settings dialog with hotkey customization"""
-        from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QTabWidget,
+        from PyQt6.QtWidgets import (
+    QLineEdit, QComboBox,QDialog, QVBoxLayout, QHBoxLayout, QTabWidget,
                                     QWidget, QLabel, QLineEdit, QPushButton,
                                     QGroupBox, QFormLayout, QKeySequenceEdit)
         from PyQt6.QtCore import Qt
