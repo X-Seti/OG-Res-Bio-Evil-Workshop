@@ -119,6 +119,15 @@ def load_rdt_file(main_window: 'ResBioEvilWorkshop', file_path: str) -> Optional
 
     # Trigger map editor update
     if hasattr(main_window, 'room_map_editor'):
+        img_debugger.debug(
+            f"RDT Loader: {rdt.room_id} -> "
+            f"cams={len(rdt.cameras)} items={len(rdt.items)} "
+            f"col={len(rdt.collision)} enemies={len(rdt.enemies)} "
+            f"aot={len(rdt.aot)}"
+        )
+        if rdt.cameras:
+            c = rdt.cameras[0]
+            img_debugger.debug(f"  cam0: from=({c.from_x},{c.from_z}) to=({c.to_x},{c.to_z})")
         main_window.room_map_editor.load_rdt(rdt)
         if hasattr(main_window, 'display_mode_combo'):
             main_window.display_mode_combo.setCurrentIndex(1)  # Switch to map view

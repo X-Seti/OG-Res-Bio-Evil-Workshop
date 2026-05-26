@@ -112,31 +112,52 @@ class RoomMapEditor(QWidget): #vers 1
         self.rdt = rdt
         self._selected_item = None
         self._selected_camera = None
-        self.reset_view()
+        self._selected_enemy = None
+        # Defer fit-to-view: widget may not have valid size yet
+        # resizeEvent/showEvent will call reset_view when size is known
+        if self.width() > 10 and self.height() > 10:
+            self.reset_view()
         self.update()
 
-    def reset_view(self): #vers 1
+    def showEvent(self, event): #vers 1
+        """Re-fit when widget becomes visible (deferred from load_rdt)."""
+        super().showEvent(event)
+        if self.rdt:
+            self.reset_view()
+
+    def resizeEvent(self, event): #vers 1
+        """Re-fit on resize."""
+        super().resizeEvent(event)
+        if self.rdt and event.oldSize().width() <= 0:
+            self.reset_view()
+
+    def reset_view(self): #vers 2
         """Fit the room into the current viewport."""
+        w, h = max(self.width(), 100), max(self.height(), 100)
+
         if not self.rdt:
             self._zoom = 1.0
-            self._pan = QPoint(self.width() // 2, self.height() // 2)
+            self._pan = QPoint(w // 2, h // 2)
             self.update()
             return
 
         min_x, max_x, min_z, max_z = self._world_bounds()
-        world_w = max(max_x - min_x, 1)
-        world_h = max(max_z - min_z, 1)
+        world_w = max(abs(max_x - min_x), 100)
+        world_h = max(abs(max_z - min_z), 100)
 
         pad = 0.85
-        zoom_x = (self.width()  * pad) / world_w
-        zoom_y = (self.height() * pad) / world_h
+        zoom_x = (w * pad) / world_w
+        zoom_y = (h * pad) / world_h
         self._zoom = min(zoom_x, zoom_y)
-        self._zoom = max(0.001, min(self._zoom, 10.0))
+        self._zoom = max(0.0005, min(self._zoom, 20.0))
 
+        # Centre the view on the bounding box centre
         cx = (min_x + max_x) / 2
         cz = (min_z + max_z) / 2
-        sx, sz = self._room_to_screen(cx, cz)
-        self._pan += QPoint(self.width() // 2 - sx, self.height() // 2 - sz)
+        self._pan = QPoint(
+            int(w / 2 - cx * self._zoom),
+            int(h / 2 - cz * self._zoom)
+        )
         self.update()
 
     # --- Coordinate transforms ---
@@ -153,29 +174,37 @@ class RoomMapEditor(QWidget): #vers 1
         z = (sy - self._pan.y()) / self._zoom
         return x, z
 
-    def _world_bounds(self) -> Tuple[float, float, float, float]: #vers 1
-        """Return (min_x, max_x, min_z, max_z) of all data."""
+    def _world_bounds(self) -> Tuple[float, float, float, float]: #vers 3
+        """Return (min_x, max_x, min_z, max_z) bounding box of all data."""
         if not self.rdt:
             return -1000, 1000, -1000, 1000
 
         xs, zs = [], []
 
-        for b in self.rdt.collision:
-            xs += [b.x1, b.x2]
-            zs += [b.z1, b.z2]
+        for b in getattr(self.rdt, 'collision', []):
+            xs += [b.x1, b.x2]; zs += [b.z1, b.z2]
+        for item in getattr(self.rdt, 'items', []):
+            xs.append(item.x); zs.append(item.z)
+        for cam in getattr(self.rdt, 'cameras', []):
+            for v in [cam.from_x, cam.to_x]:
+                if v != 0: xs.append(v)
+            for v in [cam.from_z, cam.to_z]:
+                if v != 0: zs.append(v)
+        for enemy in getattr(self.rdt, 'enemies', []):
+            xs.append(enemy.x); zs.append(enemy.z)
+        for aot in getattr(self.rdt, 'aot', []):
+            xs += [aot.x1, aot.x2]; zs += [aot.z1, aot.z2]
 
-        for item in self.rdt.items:
-            xs.append(item.x)
-            zs.append(item.z)
+        # Filter out extreme outlier values (bad parse data)
+        if xs:
+            xs = [v for v in xs if -50000 < v < 50000]
+        if zs:
+            zs = [v for v in zs if -50000 < v < 50000]
 
-        for cam in self.rdt.cameras:
-            xs += [cam.from_x, cam.to_x]
-            zs += [cam.from_z, cam.to_z]
-
-        if not xs:
+        if not xs or not zs:
             return -2000, 2000, -2000, 2000
 
-        pad = 500
+        pad = max(500, (max(xs) - min(xs)) * 0.1)
         return min(xs) - pad, max(xs) + pad, min(zs) - pad, max(zs) + pad
 
     # --- Drawing ---
