@@ -64,6 +64,7 @@ from apps.core.disc_image import (
 COLORS = {
     # Room data
     '.RDT': QColor(100, 180, 255),   # room file - blue
+    '.ARD': QColor(120, 160, 255),   # RE1.5 room data - blue
     '.BSS': QColor(160, 200, 120),   # background - green
     # Textures
     '.TIM': QColor(200, 160, 80),    # PSX texture - orange
@@ -463,14 +464,16 @@ class DiscManagerDialog(QDialog): #vers 2
         self.open_btn.setEnabled(False)
         self.tree.clear()
 
+        # Keep strong refs - Python GC will kill threads otherwise
         self._worker = DiscOpenWorker(path)
-        self._worker_thread = QThread()
+        self._worker_thread = QThread(self)   # parent=self keeps alive
         self._worker.moveToThread(self._worker_thread)
         self._worker_thread.started.connect(self._worker.run)
         self._worker.finished.connect(self._on_disc_opened)
         self._worker.error.connect(self._on_disc_error)
         self._worker.progress.connect(lambda m: self._log(m))
         self._worker.finished.connect(self._worker_thread.quit)
+        self._worker_thread.finished.connect(self._worker_thread.deleteLater)
         self._worker_thread.start()
 
     def _open_archive(self, path: str, fmt: DiscFormat): #vers 1
@@ -807,15 +810,21 @@ class DiscManagerDialog(QDialog): #vers 2
         self._log(f"Extracted {done} RE files to {out_dir}")
         self._offer_open_stage(out_dir)
 
-    def _already_extracted(self) -> bool: #vers 1
-        """Check if output folder already contains extracted RE files."""
+    def _already_extracted(self) -> bool: #vers 2
+        """Check if output folder already contains extracted game files.
+        Checks for RDT (PS1), ARD (RE1.5), ROFS*.DAT (RE3 PC), or TIM files.
+        """
         out_dir = self._get_output_dir()
         if not os.path.isdir(out_dir):
             return False
-        # Walk looking for any RDT file - that confirms a real extraction
+        game_exts = {'.RDT', '.ARD', '.TIM', '.EMD', '.BSS'}
         for root, dirs, files in os.walk(out_dir):
             for fname in files:
-                if fname.upper().endswith('.RDT'):
+                upper = fname.upper()
+                if any(upper.endswith(ext) for ext in game_exts):
+                    return True
+                # RE3 PC: ROFS*.DAT archives
+                if upper.startswith('ROFS') and upper.endswith('.DAT'):
                     return True
         return False
 

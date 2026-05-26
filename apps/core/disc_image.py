@@ -347,7 +347,7 @@ class CcdImgImage(DiscImage): #vers 1
         self._mount()
         self._scan()
 
-    def _mount(self): #vers 2
+    def _mount(self): #vers 3
         if not os.path.exists(self._img_path):
             print(f"CCD/IMG: no IMG file found at {self._img_path}")
             return
@@ -358,25 +358,59 @@ class CcdImgImage(DiscImage): #vers 1
             import pycdlib
             iso_bytes = self._reader.as_iso_bytes()
             print(f"CCD/IMG: ISO stream {len(iso_bytes)} bytes")
-            self._pyiso = pycdlib.PyCdlib()
-            self._pyiso.open_fp(io.BytesIO(iso_bytes))
-            print(f"CCD/IMG: mounted OK")
-        except Exception as e:
-            print(f"CCD/IMG mount error: {e}")
-            # Try Joliet/Rock Ridge fallback
+
+            # Try standard open
             try:
-                import pycdlib
                 self._pyiso = pycdlib.PyCdlib()
                 self._pyiso.open_fp(io.BytesIO(iso_bytes))
-            except Exception as e2:
-                print(f"CCD/IMG mount fallback also failed: {e2}")
+                print("CCD/IMG: mounted OK (standard)")
+                return
+            except Exception as e1:
+                print(f"CCD/IMG standard mount failed: {e1}")
 
-    def _scan(self): #vers 1
+            # Retry with forced sector re-read at different offsets
+            for extra_offset in [1, 2, 75, 150, 300]:
+                try:
+                    alt_reader = RawSectorReader.__new__(RawSectorReader)
+                    alt_reader._f = open(self._img_path, 'rb')
+                    alt_reader._f.seek(0, 2)
+                    alt_reader._num_sectors = alt_reader._f.tell() // _SECTOR_RAW
+                    alt_reader._track_offset = extra_offset
+                    alt_bytes = alt_reader.as_iso_bytes()
+                    self._pyiso = pycdlib.PyCdlib()
+                    self._pyiso.open_fp(io.BytesIO(alt_bytes))
+                    alt_reader.close()
+                    print(f"CCD/IMG: mounted OK (offset={extra_offset})")
+                    return
+                except Exception:
+                    try: alt_reader.close()
+                    except Exception: pass
+
+            print("CCD/IMG: all mount attempts failed")
+        except Exception as e:
+            print(f"CCD/IMG mount error: {e}")
+
+    def _scan(self): #vers 2
         self._files = []
         if not self._pyiso:
             return
         try:
+            # Try ISO9660 facade first
+            facades = []
+            try:
+                self._pyiso.get_iso9660_facade()
+                facades.append('iso9660')
+            except Exception:
+                pass
+            try:
+                self._pyiso.get_joliet_facade()
+                facades.append('joliet')
+            except Exception:
+                pass
+
+            walked = False
             for dirpath, dirnames, filenames in self._pyiso.walk(iso_path='/'):
+                walked = True
                 for fname in filenames:
                     iso_path = dirpath.rstrip('/') + '/' + fname
                     try:
@@ -386,6 +420,9 @@ class CcdImgImage(DiscImage): #vers 1
                         size = 0
                     clean = iso_path.split(';')[0]
                     self._files.append(DiscFile(path=clean, size=size))
+
+            if not walked:
+                print("CCD/IMG: ISO walk returned no directories")
         except Exception as e:
             print(f"CCD/IMG scan error: {e}")
 

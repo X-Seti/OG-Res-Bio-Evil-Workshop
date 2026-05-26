@@ -1838,12 +1838,12 @@ class ResBioEvilWorkshop(QWidget): #ver 1
             self.folder_path_label.setText(os.path.basename(folder_path))
             self.folder_path_label.setToolTip(folder_path)
 
-        # Walk subdirs to collect all RDTs (disc extractions have STAGE1/, STAGE2/ etc.)
+        # Walk subdirs to collect all RDTs and ARDs (RE1.5)
         all_rdts = []
         for root, dirs, files in os.walk(folder_path):
             dirs.sort()
             for fname in sorted(files):
-                if fname.upper().endswith('.RDT'):
+                if fname.upper().endswith(('.RDT', '.ARD')):
                     all_rdts.append(os.path.join(root, fname))
 
         # Show in left panel with relative path as label

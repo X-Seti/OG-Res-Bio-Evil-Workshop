@@ -183,6 +183,7 @@ def load_stage_assets(folder_path: str,
 
     thread.started.connect(loader.run)
     loader.finished.connect(thread.quit)
+    thread.finished.connect(thread.deleteLater)
 
     if on_progress:
         loader.progress.connect(on_progress)

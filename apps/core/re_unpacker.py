@@ -103,6 +103,11 @@ def detect_game_version(folder_path: str) -> GameVersion: #vers 1
     if rofs:
         return GameVersion.RE3_PC
 
+    # RE1.5: uses .ARD files in CD_DATA/STAGE* folders
+    ards = [f for f in files_upper if f.endswith('.ARD')]
+    if ards:
+        return GameVersion.RE1_PS1  # closest match - same era/engine base
+
     # RE3 PS1: PRS-compressed RDTs, folder often named STAGE or ROOM
     rdts = [f for f in files_upper if f.endswith('.RDT')]
     if rdts:
@@ -155,6 +160,7 @@ def scan_game_folder(folder_path: str) -> GameFolder: #vers 1
     ext_map = {
         # Room files
         '.RDT': 'rdt_files',
+        '.ARD': 'rdt_files',   # RE1.5 prototype room data
         # Textures / backgrounds
         '.TIM': 'texture_files',
         '.PAK': 'texture_files',
