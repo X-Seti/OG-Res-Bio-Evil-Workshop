@@ -855,3 +855,191 @@ def parse_sca_header(data: bytes, offset: int = 0) -> SCAHeader: #vers 1
     cx, cz = struct.unpack_from('<HH', data, offset)
     counts = list(struct.unpack_from('<5I', data, offset + 4))
     return SCAHeader(ceiling_x=cx, ceiling_z=cz, counts=counts)
+
+
+# --- Enemy and AOT name tables ---
+
+RE1_ENEMY_NAMES: dict = {
+    0x00: "Zombie (Normal)",    0x01: "Zombie (Naked)",
+    0x02: "Zombie (Lab)",       0x03: "Zombie (Researcher)",
+    0x04: "Zombie Dog",         0x05: "Crow",
+    0x06: "Hunter Alpha",       0x07: "Tarantula",
+    0x08: "Plant 42",           0x09: "Chimera",
+    0x0A: "Yawn (Small)",       0x0B: "Shark",
+    0x0C: "Neptune",            0x0D: "Tyrant T-002",
+    0x0E: "Yawn (Large)",       0x0F: "Plant 42 (Root)",
+    0x10: "Plant 42 (Vine)",    0x11: "Zombie (Keeper)",
+    0x40: "Cerberus",           0x41: "Spider",
+    0x42: "Black Tiger",
+}
+
+RE2_ENEMY_NAMES: dict = {
+    0x00: "Zombie (Normal)",    0x01: "Zombie (Naked)",
+    0x02: "Zombie (Fat)",       0x03: "Zombie (Police)",
+    0x04: "Zombie (Child)",     0x05: "Zombie Dog",
+    0x06: "Crow",               0x07: "Licker (Normal)",
+    0x08: "Licker (Red)",       0x09: "Crocodile",
+    0x0A: "Web Spinner",        0x0B: "Black Tiger",
+    0x0C: "G-Adult",            0x0D: "G-Adult (2nd)",
+    0x0E: "Ivy",                0x0F: "Ivy (Purple)",
+    0x10: "G-Embryo",           0x11: "G-Monster",
+    0x12: "G-Monster (2nd)",    0x13: "G-Monster (3rd)",
+    0x14: "G-Monster (4th)",    0x15: "G-Monster (5th)",
+    0x40: "Marvin Branagh",     0x41: "Ada Wong",
+    0x42: "Sherry",             0x43: "Robert Kendo",
+    0x50: "Tyrant T-103",       0x51: "Super Tyrant",
+}
+
+RE3_ENEMY_NAMES: dict = {
+    0x00: "Zombie (Normal)",    0x01: "Zombie (Naked)",
+    0x02: "Zombie (Fat)",       0x03: "Zombie (Police)",
+    0x04: "Zombie (Gail)",      0x05: "Zombie Dog",
+    0x06: "Crow",               0x07: "Hunter Beta",
+    0x08: "Hunter Gamma",       0x09: "Drain Deimos",
+    0x0A: "Drain Deimos (Frog)",0x0B: "Brain Sucker",
+    0x0C: "Nemesis (Stage 1)",  0x0D: "Nemesis (Tentacle)",
+    0x0E: "Nemesis (Stage 2)",  0x0F: "Nemesis (Stage 3)",
+    0x10: "Grave Digger",       0x11: "Giant Spider",
+    0x12: "Sliding Worm",       0x13: "Nemesis (Final)",
+    0x40: "Carlos Oliveira",    0x41: "Mikhail Victor",
+    0x42: "Nikolai Zinoviev",
+}
+
+AOT_TYPE_NAMES: dict = {
+    0: "None", 1: "Door", 2: "Item", 3: "Event",
+    4: "Player", 5: "Auto", 6: "Message", 7: "Water",
+}
+
+
+def get_enemy_name(enemy_type: int, game: str = 're1') -> str: #vers 2
+    """Return enemy name for given type and game version."""
+    if game == 're3':
+        table = RE3_ENEMY_NAMES
+    elif game == 're2':
+        table = RE2_ENEMY_NAMES
+    else:
+        table = RE1_ENEMY_NAMES
+    return table.get(enemy_type, f"Unknown (0x{enemy_type:02X})")
+
+
+# --- Enemy parsers ---
+
+def _parse_rdt_enemies_re1(rdt: RDTFile, data: bytes, size: int): #vers 1
+    """Parse RE1 enemy placement from offset[8]."""
+    if not rdt.header or len(rdt.header.offsets) < 9:
+        return
+    off = rdt.header.offsets[8]
+    if off == 0 or off >= size:
+        return
+    struct_size = 14
+    for _ in range(32):
+        if off + struct_size > size:
+            break
+        vals = struct.unpack_from('<BhhhHHHH', data, off)
+        if vals[0] == 0xFF:
+            break
+        rdt.enemies.append(RDTEnemy(
+            enemy_type=vals[0], x=vals[1], y=vals[2], z=vals[3],
+            rotation=vals[4], id=vals[5], num=vals[6],
+            floor=0, sound_bank=0, effect_bank=0,
+        ))
+        off += struct_size
+
+
+def _parse_rdt_enemies_re2(rdt: RDTFile, data: bytes, size: int): #vers 1
+    """Parse RE2 enemy placement from offset[9]."""
+    if not rdt.header or len(rdt.header.offsets) < 10:
+        return
+    off = rdt.header.offsets[9]
+    if off == 0 or off >= size:
+        return
+    struct_size = 16
+    for _ in range(32):
+        if off + struct_size > size:
+            break
+        vals = struct.unpack_from('<BBBBhhhHHH', data, off)
+        if vals[0] == 0xFF:
+            break
+        rdt.enemies.append(RDTEnemy(
+            enemy_type=vals[0], floor=vals[1],
+            sound_bank=vals[2], effect_bank=vals[3],
+            x=vals[4], y=vals[5], z=vals[6],
+            rotation=vals[7], id=vals[8], num=vals[9],
+        ))
+        off += struct_size
+
+
+# --- AOT parsers ---
+
+def _parse_rdt_aot_re1(rdt: RDTFile, data: bytes, size: int): #vers 1
+    """Parse RE1 AOT from offset[6]."""
+    if not rdt.header or len(rdt.header.offsets) < 7:
+        return
+    off = rdt.header.offsets[6]
+    if off == 0 or off >= size:
+        return
+    _parse_aot_at(rdt, data, size, off)
+
+
+def _parse_rdt_aot_re2(rdt: RDTFile, data: bytes, size: int): #vers 1
+    """Parse RE2/RE3 AOT from offset[5]."""
+    if not rdt.header or len(rdt.header.offsets) < 6:
+        return
+    off = rdt.header.offsets[5]
+    if off == 0 or off >= size:
+        return
+    _parse_aot_at(rdt, data, size, off)
+
+
+def _parse_aot_at(rdt: RDTFile, data: bytes, size: int, off: int): #vers 1
+    """Shared AOT parser. Each entry is 20 bytes."""
+    struct_size = 20
+    for _ in range(64):
+        if off + struct_size > size:
+            break
+        vals = struct.unpack_from('<HhhHHBB', data, off)
+        aot_type = vals[0]
+        if aot_type == 0xFFFF:
+            break
+        aot_data = data[off + 12: off + 20]
+        rdt.aot.append(RDTAot(
+            aot_type=aot_type & 0xFF,
+            x=vals[1], z=vals[2],
+            w=vals[3], d=vals[4],
+            floor=vals[5], super_type=vals[6],
+            data=aot_data,
+        ))
+        off += struct_size
+
+
+def _parse_rdt_camera_switches(rdt: RDTFile, data: bytes, size: int): #vers 1
+    """Parse camera switch zones from offset[3] or [4]."""
+    if not rdt.header or len(rdt.header.offsets) < 4:
+        return
+    for idx in [3, 4, 5]:
+        if idx >= len(rdt.header.offsets):
+            continue
+        off = rdt.header.offsets[idx]
+        if off == 0 or off >= size or off + 12 > size:
+            continue
+        first = struct.unpack_from('<HH', data, off)
+        if first[0] > 16 or first[1] > 16:
+            continue
+        struct_size = 12
+        switches = []
+        for _ in range(32):
+            if off + struct_size > size:
+                break
+            vals = struct.unpack_from('<HHhhhh', data, off)
+            if vals[0] == 0xFFFF:
+                break
+            switches.append(RDTCameraSwitch(
+                from_cam=vals[0], to_cam=vals[1],
+                x1=vals[2], z1=vals[3],
+                x2=vals[4], z2=vals[5],
+                floor=0,
+            ))
+            off += struct_size
+        if switches:
+            rdt.camera_switches = switches
+            return

@@ -69,9 +69,10 @@ GRID_SPACING = 500  # RE1 world units
 class RoomMapEditor(QWidget): #vers 1
     """2D top-down map editor for a single RE1 room."""
 
-    item_selected = pyqtSignal(int)       # emits item index
-    camera_selected = pyqtSignal(int)     # emits camera index
-    item_moved = pyqtSignal(int, int, int)  # emits item_index, new_x, new_z
+    item_selected   = pyqtSignal(int)
+    camera_selected = pyqtSignal(int)
+    enemy_clicked   = pyqtSignal(int)
+    item_moved      = pyqtSignal(int, int, int)
 
     def __init__(self, parent=None): #vers 1
         super().__init__(parent)
@@ -91,11 +92,15 @@ class RoomMapEditor(QWidget): #vers 1
         self._drag_item_origin: Optional[Tuple[int, int]] = None
 
         # Display toggles
-        self.show_grid = True
-        self.show_collision = True
-        self.show_cameras = True
-        self.show_items = True
+        self.show_grid         = True
+        self.show_collision    = True
+        self.show_cameras      = True
+        self.show_items        = True
         self.show_camera_lines = True
+        self.show_enemies      = True
+        self.show_aot          = True
+        self.show_cam_switches = False
+        self._selected_enemy: Optional[int] = None
 
         self.setMinimumSize(300, 300)
         self.setMouseTracking(True)
