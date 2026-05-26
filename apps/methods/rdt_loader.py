@@ -90,21 +90,30 @@ def load_rdt_file(main_window: 'ResBioEvilWorkshop', file_path: str) -> Optional
     if hasattr(main_window, 'scripts_btn'):
         main_window.scripts_btn.setEnabled(rdt.valid)
 
-    # Init item icon cache if not already loaded
+    # Init item icon cache once (walk is expensive, only do it once per session)
     from apps.core.re_item_icons import is_cache_loaded, init_icon_cache
-    if not is_cache_loaded():
-        search_roots = [
-            os.path.dirname(rdt.file_path),          # room folder
-            os.path.dirname(os.path.dirname(rdt.file_path)),  # parent
-            os.path.dirname(os.path.dirname(os.path.dirname(rdt.file_path))),  # grandparent
-        ]
-        if init_icon_cache(search_roots):
+    if not is_cache_loaded() and not getattr(main_window, '_icon_cache_searched', False):
+        main_window._icon_cache_searched = True  # don't retry on every RDT
+        folder = rdt.file_path
+        roots = set()
+        for _ in range(4):  # walk up max 4 levels
+            folder = os.path.dirname(folder)
+            if folder and folder not in roots:
+                roots.add(folder)
+        if init_icon_cache(list(roots)):
             img_debugger.debug("Item icon cache loaded from STATUS.TIM")
 
-    # Load audio file for this room if player exists
+    # Load audio - only scan folder if it changed since last load
     if hasattr(main_window, 'audio_player') and main_window.audio_player:
-        from apps.core.re_audio import scan_audio_files
-        audio_files = scan_audio_files(os.path.dirname(rdt.file_path))
+        room_dir = os.path.dirname(rdt.file_path)
+        last_dir = getattr(main_window, '_last_audio_scan_dir', None)
+        if room_dir != last_dir:
+            from apps.core.re_audio import scan_audio_files
+            audio_files = scan_audio_files(room_dir)
+            main_window._last_audio_scan_dir = room_dir
+            main_window._last_audio_files = audio_files
+        else:
+            audio_files = getattr(main_window, '_last_audio_files', [])
         if audio_files:
             main_window.audio_player.load_file(audio_files[0])
 
