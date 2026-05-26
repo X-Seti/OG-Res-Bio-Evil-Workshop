@@ -282,93 +282,146 @@ class SCAFile: #vers 1
 
 # --- Item type table (RE1) ---
 
-RE1_ITEM_NAMES = { #vers 1
-    0x00: "Nothing",
-    0x01: "Combat Knife",
-    0x02: "Beretta",
-    0x03: "Shotgun",
-    0x04: "Magnum",
-    0x05: "Flamethrower",
-    0x06: "Bazooka",
-    0x07: "Acid Rounds",
-    0x08: "Flame Rounds",
-    0x09: "Beretta Rounds",
-    0x0A: "Shotgun Shells",
-    0x0B: "Magnum Rounds",
-    0x0C: "Keys",
-    0x0D: "Herb (Green)",
-    0x0E: "Herb (Red)",
-    0x0F: "Herb (Blue)",
-    0x10: "First Aid Spray",
-    0x11: "Mixed Herbs (G+R)",
-    0x12: "Mixed Herbs (G+B)",
-    0x13: "Mixed Herbs (G+G)",
-    0x14: "Mixed Herbs (G+G+G)",
-    0x15: "Mixed Herbs (G+R+B)",
-    0x20: "Ink Ribbon",
-    0x28: "Wooden Emblem",
-    0x29: "Gold Emblem",
-    0x2A: "Blue Jewel",
-    0x2B: "Red Jewel",
-    0x2C: "Music Notes",
-    0x30: "Armor Key",
-    0x31: "Sheild Key",
-    0x32: "Helmet Key",
-    0x33: "Sword Key",
-    0x36: "Battery",
-    0x37: "MO Disk",
-    0x38: "Wind Crest",
-    0x39: "Flamethrower Part",
-    0x3A: "Slides",
-    0x3B: "Moon Crest",
-    0x3C: "Star Crest",
-    0x3D: "Sun Crest",
-    0x3E: "Lighter",
-    0x3F: "Lockpick",
-    0x41: "Doom Book Vol 2",
-    0x48: "Dagger",
-    0x49: "Clip (Empty)",
-    0x4A: "Clip (Full)",
-    0x4B: "Clip (Infinite)",
-    0x50: "Document",
+RE1_ITEM_NAMES: dict = {  # from RE1-Mod-SDK xml/item.xml
+    0x01: "Combat Knife",  0x02: "Beretta",  0x03: "Shotgun",
+    0x04: "Colt Python",  0x05: "Colt Python",  0x06: "Flamethrower",
+    0x07: "Grenade Gun",  0x08: "Grenade Gun",  0x09: "Grenade Gun",
+    0x0A: "Rocket Launcher",  0x0B: "Hand Gun Bullets",  0x0C: "Shotgun Shells",
+    0x0D: "DumDum Bullets",  0x0E: "Magnum Bullets",  0x0F: "Fuel",
+    0x10: "Grenade Rounds",  0x11: "Acid Rounds",  0x12: "Flame Rounds",
+    0x13: "Empty Bottle",  0x14: "Water",  0x15: "UMB No.2",
+    0x16: "UMB No.4",  0x17: "UMB No.7",  0x18: "UMB No.13",
+    0x19: "Yellow-6",  0x1A: "NP-003",  0x1B: "V-Jolt",
+    0x1C: "Broken Shotgun",  0x1D: "Square Crank",  0x1E: "Hexagonal Crank",
+    0x1F: "Emblem",  0x20: "Gold Emblem",  0x21: "Blue Jewel",
+    0x22: "Red Jewel",  0x23: "Music Score",  0x24: "Wolf Medal",
+    0x25: "Eagle Medal",  0x26: "Herbicide",  0x27: "Battery",
+    0x28: "MO-Disk",  0x29: "Wind Crest",  0x2A: "Flare",
+    0x2B: "Slides",  0x2C: "Moon Crest",  0x2D: "Star Crest",
+    0x2E: "Sun Crest",  0x2F: "Ink Ribbon",  0x30: "Lighter",
+    0x31: "Lockpick",  0x33: "Sword Key",  0x34: "Armor Key",
+    0x35: "Shield Key",  0x36: "Helmet Key",  0x37: "Master Key",
+    0x38: "Closet Key",  0x39: "Key for Room 002",  0x3A: "Key for Room 003",
+    0x3B: "Control Room Key",  0x3C: "Power Room Key",  0x3D: "Desk Key",
+    0x3E: "Blank Book",  0x3F: "Doom Book 2",  0x40: "Doom Book 1",
+    0x41: "First Aid Spray",  0x42: "Serum",  0x43: "Red Herb",
+    0x44: "Green Herb",  0x45: "Blue Herb",  0x46: "Mixed Herbs",
+    0x47: "Mixed Herbs",  0x48: "Mixed Herbs",  0x49: "Mixed Herbs",
+    0x4A: "Mixed Herbs",  0x4B: "Mixed Herbs",  0x4D: "Comm. Radio",
+    0x5F: "Researcher's Will",  0x60: "Researcher's Will",  0x61: "Keeper's Diary",
+    0x62: "Orders",  0x63: "Pass Number",  0x64: "Plant-42 Report",
+    0x65: "Fax",  0x66: "Scrapbook",  0x67: "Security System",
+    0x68: "Researcher's Letter",  0x69: "V-Jolt Report",  0x6A: "Barry's Picture",
+    0x6B: "Pass Code 01",  0x6C: "Pass Code 02",  0x6D: "Pass Code 03",
+    0x6E: "Botany Book",  0x6F: "Ingram",  0x70: "Minimi",
+    0x71: "Crank",  0x72: "Crank",  0x73: "Chemical",
+    0x74: "Mansion Key",  0x75: "Mansion Key",  0x76: "Mansion Key",
+    0x77: "Mansion Key",  0x78: "Laboratory Key",  0x79: "Special Key",
+    0x7A: "Guardhouse Key",  0x7B: "Guardhouse Key",  0x7C: "Laboratory Key",
+    0x7D: "Small Key",  0x7E: "Red Book",  0x7F: "Doom Book 2",
+    0x80: "Doom Book 1",
 }
 
-RE2_ITEM_NAMES: dict = {
-    0x00: "Nothing",          0x01: "Handgun",          0x02: "Shotgun",
-    0x03: "Magnum",           0x04: "Flamethrower",      0x05: "Sparkthrower",
-    0x06: "Rocket Launcher",  0x07: "Gatling Gun",       0x08: "Knife",
-    0x09: "Handgun Rounds",   0x0A: "Shotgun Shells",    0x0B: "Magnum Rounds",
-    0x0C: "Fuel",             0x0D: "Spark Rounds",      0x0E: "Explosive Rounds",
-    0x0F: "Ink Ribbon",       0x10: "First Aid Spray",   0x11: "Red Herb",
-    0x12: "Green Herb",       0x13: "Blue Herb",          0x14: "Mixed (R+G)",
-    0x15: "Mixed (R+G+B)",    0x16: "Mixed (G+B)",       0x17: "Mixed (G+G)",
-    0x18: "Mixed (G+G+B)",    0x19: "Mixed (G+G+G)",     0x1A: "Small Key",
-    0x1B: "Handcuffs",        0x1C: "Film A",             0x1D: "Film B",
-    0x1E: "Film C",           0x1F: "Film D",             0x20: "Unicorn Medal",
-    0x21: "Eagle Medal",      0x22: "Wolf Medal",         0x23: "Cog (small)",
-    0x24: "Cog (large)",      0x25: "Power Room Key",     0x26: "Manhole Opener",
-    0x27: "Main Fuse",        0x28: "Fuse Case",          0x29: "Vaccine Base",
-    0x2A: "Vaccine",          0x2B: "G-Virus",            0x2C: "Special Key",
-    0x2D: "Joint Plug",       0x2E: "Joint Plug (used)",  0x2F: "Permit",
-    0x30: "Armor Key",        0x31: "Locker Key",         0x32: "Basement Key",
-    0x33: "Spade Key",        0x34: "Diamond Key",        0x35: "Heart Key",
-    0x36: "Club Key",         0x37: "Rook Plug",          0x38: "Knight Plug",
-    0x39: "Bishop Plug",      0x3A: "Queen Plug",         0x3B: "King Plug",
-    0x3C: "Womens Statue",    0x3D: "Gold Cogwheel",      0x3E: "Aide Notebook",
-    0x3F: "Emblem",           0x40: "STARS Badge",        0x41: "T-Bar Tool",
-    0x42: "T-Bar (used)",     0x43: "Detonator",          0x44: "C4 Bomb",
-    0x45: "C4 Detonator",     0x46: "Cabin Key",          0x47: "Fancy Box",
-    0x48: "Ivory Comb",       0x49: "Fancy Box (open)",   0x4A: "Brass Compass",
-    0x4B: "Red Jewel",        0x4C: "Red Jewel (set)",    0x4D: "Green Jewel",
-    0x4E: "Green Jewel (set)",0x4F: "Blue Jewel",         0x50: "Blue Jewel (set)",
-    0x51: "Stone & Metal",    0x52: "Red Card Key",       0x53: "Blue Card Key",
-    0x54: "Patrol Report",    0x55: "Orders Document",    0x56: "Lab Conductor File",
-    0x57: "Instructions",     0x58: "Sewer Manager Fax",  0x59: "Trading Post Note",
-    0x5A: "Sewers Note",      0x5B: "Manager Diary",      0x5C: "Researcher Diary",
-    0x5D: "Williams Diary",   0x5E: "Map (Station)",      0x5F: "Map (Sewers)",
-    0x60: "Map (Lab)",        0x61: "Memo",               0x62: "Locker Room Note",
-    0x63: "Darkroom Note",    0x64: "Chief Mail",         0x65: "Map (Station 2F)",
-    0x66: "Map (Station 1F)",
+RE1_ITEM_ICONS: dict = {  # item_type -> icon_id in ITEM_ALL.PIX
+    0x00: "0",  0x01: "1",  0x02: "2",
+    0x03: "3",  0x04: "4",  0x05: "4",
+    0x06: "5",  0x07: "6",  0x08: "6",
+    0x09: "6",  0x0A: "7",  0x0B: "8",
+    0x0C: "9",  0x0D: "10",  0x0E: "11",
+    0x0F: "12",  0x10: "13",  0x11: "14",
+    0x12: "15",  0x13: "16",  0x14: "17",
+    0x15: "18",  0x16: "19",  0x17: "20",
+    0x18: "21",  0x19: "22",  0x1A: "23",
+    0x1B: "24",  0x1C: "25",  0x1D: "26",
+    0x1E: "27",  0x1F: "28",  0x20: "29",
+    0x21: "30",  0x22: "31",  0x23: "32",
+    0x24: "33",  0x25: "34",  0x26: "35",
+    0x27: "36",  0x28: "37",  0x29: "38",
+    0x2A: "39",  0x2B: "40",  0x2C: "41",
+    0x2D: "42",  0x2E: "43",  0x2F: "44",
+    0x30: "45",  0x31: "46",  0x32: "47",
+    0x33: "48",  0x34: "49",  0x35: "50",
+    0x36: "51",  0x37: "52",  0x38: "53",
+    0x39: "54",  0x3A: "55",  0x3B: "56",
+    0x3C: "57",  0x3D: "58",  0x3E: "59",
+    0x3F: "60",  0x40: "61",  0x41: "62",
+    0x42: "63",  0x43: "64",  0x44: "65",
+    0x45: "66",  0x46: "67",  0x47: "68",
+    0x48: "69",  0x49: "70",  0x4A: "71",
+    0x4B: "72",  0x4C: "73",  0x4D: "74",
+}
+
+RE1_ITEM_MAX: dict = {  # max ammo/count per item type
+    0x02: "15",  0x03: "7",  0x04: "6",
+    0x05: "6",  0x06: "240",  0x07: "6",
+    0x08: "6",  0x09: "6",  0x0A: "4",
+    0x0B: "15",  0x0C: "7",  0x0D: "6",
+    0x0E: "6",  0x0F: "240",  0x10: "6",
+    0x11: "6",  0x12: "6",  0x13: "1",
+    0x14: "1",  0x15: "1",  0x16: "1",
+    0x17: "1",  0x18: "1",  0x19: "1",
+    0x1A: "1",  0x1B: "1",  0x1C: "1",
+    0x1F: "1",  0x20: "1",  0x21: "1",
+    0x22: "1",  0x23: "1",  0x24: "1",
+    0x25: "1",  0x26: "1",  0x27: "1",
+    0x28: "1",  0x29: "1",  0x2A: "1",
+    0x2B: "1",  0x2C: "1",  0x2D: "1",
+    0x2E: "1",  0x2F: "3",  0x32: "2",
+    0x3D: "1",  0x3E: "1",  0x3F: "1",
+    0x40: "1",  0x41: "1",  0x42: "1",
+    0x43: "1",  0x44: "1",  0x45: "1",
+    0x46: "1",  0x47: "1",  0x48: "1",
+    0x49: "1",  0x4A: "1",  0x4B: "1",
+}
+
+RE2_ITEM_NAMES: dict = {  # from RE2-Mod-tools mod-sdk/xml/item.xml
+    0x00: "Nothing",  0x02: "Knife",  0x03: "Hand Gun",
+    0x04: "Hand Gun",  0x05: "C. Hand Gun",  0x06: "Magnum",
+    0x07: "C. Magnum",  0x08: "Shotgun",  0x09: "C. Shotgun",
+    0x0A: "G. Launcher",  0x0B: "G. Launcher",  0x0C: "G. Launcher",
+    0x0D: "Bow Gun",  0x0E: "Colt S.A.A.",  0x0F: "Spark Shot",
+    0x10: "S. Machine Gun",  0x11: "Flamethrower",  0x12: "R. Launcher",
+    0x13: "Gatling Gun",  0x14: "Hand Gun",  0x15: "H. Gun Bullets",
+    0x16: "Shotgun Shells",  0x17: "M. Bullets",  0x18: "Fuel",
+    0x19: "G. Rounds",  0x1A: "Flame Rounds",  0x1B: "Acid Rounds",
+    0x1C: "M.G. Bullets",  0x1D: "S. Shot Bullets",  0x1E: "Bow Gun Bolts",
+    0x1F: "Ink Ribbon",  0x20: "Small Key",  0x21: "H. Gun Parts",
+    0x22: "Magnum Parts",  0x23: "Shotgun Parts",  0x24: "F. Aid Spray",
+    0x25: "Anti-virus bomb",  0x26: "Chemical AC-W24",  0x27: "Green Herb",
+    0x28: "Red Herb",  0x29: "Blue Herb",  0x2A: "Mixed Herb",
+    0x2B: "Mixed Herb",  0x2C: "Mixed Herb",  0x2D: "Mixed Herb",
+    0x2E: "Mixed Herb",  0x2F: "Mixed Herb",  0x30: "Lighter",
+    0x31: "Lockpick",  0x32: "Picture",  0x33: "Valve Handle",
+    0x34: "Red Jewel",  0x35: "Red Card Key",  0x36: "Blue Card Key",
+    0x37: "Serpent Stone",  0x38: "Jaguar Stone",  0x39: "Blue Stone",
+    0x3A: "Blue Stone",  0x3B: "Eagle Stone",  0x3C: "Bishop Plug",
+    0x3D: "Rook Plug",  0x3E: "Knight Plug",  0x3F: "King Plug",
+    0x40: "W. Box Key",  0x41: "Detonator",  0x42: "Plastic Bomb",
+    0x43: "Bomb & Det.",  0x44: "Crank",  0x45: "Film",
+    0x46: "Film",  0x47: "Film",  0x48: "Unicorn Medal",
+    0x49: "Eagle Medal",  0x4A: "Wolf Medal",  0x4B: "G. Cogwheel",
+    0x4C: "Manhole Opener",  0x4D: "Main Fuse",  0x4E: "Fuse Case",
+    0x4F: "Vaccine",  0x50: "Vaccine Cart.",  0x51: "Film",
+    0x52: "Base Vaccine",  0x53: "G-virus",  0x54: "Special Key",
+    0x55: "Joint S Plug",  0x56: "Joint N Plug",  0x57: "Cord",
+    0x58: "Picture",  0x59: "Cabin Key",  0x5A: "Precinct Key",
+    0x5B: "Precinct Key",  0x5C: "Precinct Key",  0x5D: "Precinct Key",
+    0x5E: "C. Panel Key",  0x5F: "C. Panel Key",  0x60: "P. Room Key",
+    0x61: "MO disk",  0x62: "Lab Card Key",  0x63: "Master Key",
+    0x64: "Platform Key",  0x65: "no item",  0x66: "no item",
+    0x67: "no item",  0x68: "no item",  0x69: "CHRIS's diary",
+    0x6A: "Mail to Chris",  0x6B: "Memo to LEON",  0x6C: "Police memorandum",
+    0x6D: "Operation report 1",  0x6E: "Mail to the chief",  0x6F: "Mail to the chief",
+    0x70: "Secretary's diary A",  0x71: "Secretary's diary B",  0x72: "Operation report 2",
+    0x73: "User registration",  0x74: "Film A",  0x75: "Film B",
+    0x76: "Film C",  0x77: "Patrol report",  0x78: "Watchman's diary",
+    0x79: "Chief's diary",  0x7A: "Sewer manager diary",  0x7B: "Sewer manager fax",
+    0x7C: "Film D",  0x7D: "Vaccine synthesis",  0x7E: "Lab security manual",
+    0x7F: "P-epsilon report",  0x80: "Rookie files",  0x81: "Rookie files",
+    0x82: "no item",  0x83: "Spade Key",  0x84: "Diamond Key",
+    0x85: "Desk Key",  0x86: "Heart Key",  0x87: "Club Key",
+    0x88: "Virgin Heart",  0x89: "Square Crank",  0x8A: "Down Key",
+    0x8B: "Up Key",  0x8C: "Locker Key",
 }
 
 RE3_ITEM_NAMES: dict = {
@@ -573,85 +626,178 @@ def parse_rdt(file_path: str) -> RDTFile: #vers 4
     return rdt
 
 
-def _parse_rdt_re1(rdt: RDTFile, data: bytes, size: int): #vers 1
-    """Parse RE1 format RDT. 19 offsets, cameras at 0x94."""
-    unknown0, num_cameras, num_sound_banks = struct.unpack_from('<BBB', data, 0)
-    header = RDTHeader(
-        unknown0=unknown0,
-        num_cameras=num_cameras,
-        num_sound_banks=num_sound_banks,
-        unknown1=data[3:6],
-    )
-    if size < 0x20 + 19 * 4:
-        raise RE1FormatError("File too small for RE1 offset table")
-    header.offsets = list(struct.unpack_from('<19I', data, 0x20))
-    rdt.header = header
+def _parse_rdt_re1(rdt: RDTFile, data: bytes, size: int): #vers 2
+    """Parse RE1 RDT using exact offsets from re1.h (Gemini-Loboto3/RE1-Mod-SDK).
 
-    cam_offset = 0x94
-    cam_struct_size = 44
-    for i in range(num_cameras):
-        off = cam_offset + i * cam_struct_size
-        if off + cam_struct_size > size:
-            rdt.parse_errors.append(f"Camera {i}: out of bounds")
+    Header layout (re1.h tagRdtHeader):
+      0x00 nSprite, 0x01 nCut(cameras), 0x02 nItem, 0x03 nOmodel, 0x04 nDoor
+      0x06 ambient[3]  (3 x u16)
+      0x0C Light[3]    (3 x LIGHT_DATA, 20 bytes each = 60 bytes total)
+      0x48 pVcut       collision/SCA pointer
+      0x4C pSca        (second SCA)
+      0x50 pObj[0]     static objects
+      0x54 pObj[1]
+      0x58 pBlk        block data
+      0x5C pFlr        floor data
+      0x60 pScrl       SCD init script
+      0x64 pScdx       SCD thread script
+      0x68 pScd        (legacy)
+      0x6C pEmr        enemy placement
+      0x70 pEdd        enemy animation data
+      0x74 pMessage    text/messages
+      0x84 pTim        textures
+      0x88 pEdt        audio table
+      0x8C pVh         VAG header
+      0x90 pVb         VAG body
+      0x94 Cut[nCut]   camera array, each RCUT = 44 bytes
+           RCUT: pSp(4), pTim(4), View_p[3](12), View_r[3](12), Zero[2](8), ViewR(4)
+    """
+    if size < 0x94:
+        rdt.parse_errors.append(f"File too small for RE1: {size} bytes")
+        return
+
+    hdr = data
+    n_cameras = hdr[1]
+    n_items   = hdr[2]
+
+    # Read exact offsets from re1.h
+    import struct as _s
+    pVcut    = _s.unpack_from('<I', hdr, 0x48)[0]
+    pSca     = _s.unpack_from('<I', hdr, 0x4C)[0]
+    pEmr     = _s.unpack_from('<I', hdr, 0x6C)[0]
+    pScrl    = _s.unpack_from('<I', hdr, 0x60)[0]  # SCD init
+    pScdx    = _s.unpack_from('<I', hdr, 0x64)[0]  # SCD thread
+    pTim     = _s.unpack_from('<I', hdr, 0x84)[0]
+    pVh      = _s.unpack_from('<I', hdr, 0x8C)[0]
+    pVb      = _s.unpack_from('<I', hdr, 0x90)[0]
+
+    # Build offsets dict for shared parsers
+    rdt.header.offsets = [0] * 19
+    rdt.header.offsets[0]  = pVcut    # collision
+    rdt.header.offsets[1]  = pSca     # second SCA
+    rdt.header.offsets[6]  = _s.unpack_from('<I', hdr, 0x50)[0]  # pObj[0]
+    rdt.header.offsets[7]  = _s.unpack_from('<I', hdr, 0x54)[0]  # pObj[1]
+    rdt.header.offsets[8]  = pEmr     # enemies
+    rdt.header.offsets[9]  = pScrl    # SCD init
+    rdt.header.offsets[10] = pScdx    # SCD thread
+
+    # Parse cameras from 0x94, each RCUT = 44 bytes
+    cam_off = 0x94
+    RCUT_SIZE = 44
+    for i in range(min(n_cameras, 16)):
+        if cam_off + RCUT_SIZE > size:
             break
-        vals = struct.unpack_from('<11i', data, off)
+        # View_p = camera eye (x,y,z), View_r = camera at (x,y,z)
+        eye = _s.unpack_from('<3i', hdr, cam_off + 8)
+        at  = _s.unpack_from('<3i', hdr, cam_off + 20)
         rdt.cameras.append(RDTCamera(
-            masks_offset=vals[0], tim_masks_offset=vals[1],
-            from_x=vals[2], from_y=vals[3], from_z=vals[4],
-            to_x=vals[5],   to_y=vals[6],   to_z=vals[7],
-            unknown=list(vals[8:11]),
+            from_x=eye[0], from_y=eye[1], from_z=eye[2],
+            to_x=at[0], to_y=at[1], to_z=at[2],
+            camera_index=i,
         ))
+        cam_off += RCUT_SIZE
 
-    _parse_rdt_items(rdt, data, size)
-    _parse_rdt_collision(rdt, data, size)
+    # Parse collision using exact pVcut offset
+    if pVcut and pVcut < size:
+        _parse_collision_at(rdt, data, size, pVcut)
+    elif pSca and pSca < size:
+        _parse_collision_at(rdt, data, size, pSca)
+
+    # Parse enemies using exact pEmr offset
     _parse_rdt_enemies_re1(rdt, data, size)
-    _parse_rdt_aot_re1(rdt, data, size)
+
+    # Parse AOT (items/triggers) from pObj
+    pObj0 = rdt.header.offsets[6]
+    if pObj0 and pObj0 < size:
+        _parse_aot_at(rdt, data, size, pObj0)
+
     _parse_rdt_camera_switches(rdt, data, size)
 
 
-def _parse_rdt_re2(rdt: RDTFile, data: bytes, size: int): #vers 1
-    """Parse RE2/RE3 format RDT. 21 offsets, cameras at 0xA8.
-    RE2 header: byte[0]=flags, byte[1]=num_sprites, byte[2]=num_cameras,
-                byte[3]=num_sound_banks
+def _parse_rdt_re2(rdt: RDTFile, data: bytes, size: int): #vers 2
+    """Parse RE2/RE3 RDT using exact offsets from Room.h (RE2-Mod-tools/roomslicer).
+
+    Header layout (tagRdtHeader in Room.h):
+      0x00 nSprite, 0x01 nCut(cameras), 0x02 nOmodel, 0x03 nItem
+      0x04 nDoor, 0x05 nRoom_at, 0x06 Reverb_lv, 0x07 nSprite_max
+      --- 23 section offsets (uint32) starting at 0x08 ---
+      0x08 pEdt0    KAN0 - sound table
+      0x0C pVh0     VH0  - VAG header 1
+      0x10 pVb0     VB0  - VAG body 1
+      0x14 kan1     KAN1 - sound table 2
+      0x18 vh1      VH1  - VAG header 2
+      0x1C vb1      VB1  - VAG body 2
+      0x20 sca      SCA  - collision data
+      0x24 rid      RID  - camera cut RID data
+      0x28 rvd      RVD  - room visual data
+      0x2C lit      LIT  - lighting
+      0x30 obj      OBJ  - static objects
+      0x34 flr      FLR  - floor data
+      0x38 blk      BLK  - block data
+      0x3C tex[0]   TEX0 - textures
+      0x40 tex[1]   TEX1 - textures 2
+      0x44 scd[0]   SCD0 - script init
+      0x48 scd[1]   SCD1 - script thread
+      0x4C scd[2]   SCD2 - (unused)
+      0x50 pEsp     ESP  - effect sprites
+      0x54 pEff     EFF  - effects
+      0x58 pTim[0]  ETIM - effect textures
+      0x5C pTim[1]  MTIM - mask textures
+      0x60 rbj      RBJ  - rigidbody joints
+      --- 0x64: camera array (RCUT structures) ---
     """
-    num_sprites, num_cameras, num_sound_banks = data[1], data[2], data[3]
-    header = RDTHeader(
-        unknown0=data[0],
-        num_cameras=num_cameras,
-        num_sound_banks=num_sound_banks,
-        unknown1=data[4:7],
-    )
-    if size < 0x20 + 21 * 4:
-        raise RE1FormatError("File too small for RE2 offset table")
-    header.offsets = list(struct.unpack_from('<21I', data, 0x20))
-    # Pad to 21 if needed for shared code
-    while len(header.offsets) < 21:
-        header.offsets.append(0)
-    rdt.header = header
+    import struct as _s
 
-    # RE2 cameras start at 0xA8 (header 8 + 21 offsets*4 = 8+84=92... 
-    # Actually: 0x20 + 21*4 = 0x74, but there's extra header data up to 0xA8)
-    cam_offset = 0xA8
-    cam_struct_size = 44
-    for i in range(num_cameras):
-        off = cam_offset + i * cam_struct_size
-        if off + cam_struct_size > size:
-            rdt.parse_errors.append(f"Camera {i}: out of bounds (RE2)")
+    if size < 0x64:
+        rdt.parse_errors.append(f"File too small for RE2: {size} bytes")
+        return
+
+    hdr = data
+    n_cameras = hdr[1]
+
+    # Read all 23 section offsets
+    offsets = list(_s.unpack_from('<23I', hdr, 0x08))
+    rdt.header.offsets = offsets
+
+    # Named aliases matching Room.h enum RdtMain
+    sca     = offsets[6]   # RDT_SCA  - collision
+    rid     = offsets[7]   # RDT_RID  - camera RID data
+    obj     = offsets[10]  # RDT_OBJ  - static objects / AOT items
+    scd0    = offsets[15]  # RDT_SCD0 - init script
+    scd1    = offsets[16]  # RDT_SCD1 - run script
+    etim    = offsets[20]  # RDT_ETIM - enemy placement
+    pEdt0   = offsets[0]   # RDT_KAN0 - audio/enemy data
+
+    # Cameras start at 0x64, each RCUT = 44 bytes (same as RE1)
+    cam_off = 0x64
+    RCUT_SIZE = 44
+    for i in range(min(n_cameras, 16)):
+        if cam_off + RCUT_SIZE > size:
             break
-        vals = struct.unpack_from('<11i', data, off)
+        eye = _s.unpack_from('<3i', hdr, cam_off + 8)
+        at  = _s.unpack_from('<3i', hdr, cam_off + 20)
         rdt.cameras.append(RDTCamera(
-            masks_offset=vals[0], tim_masks_offset=vals[1],
-            from_x=vals[2], from_y=vals[3], from_z=vals[4],
-            to_x=vals[5],   to_y=vals[6],   to_z=vals[7],
-            unknown=list(vals[8:11]),
+            from_x=eye[0], from_y=eye[1], from_z=eye[2],
+            to_x=at[0], to_y=at[1], to_z=at[2],
+            camera_index=i,
         ))
+        cam_off += RCUT_SIZE
 
-    # RE2 offset table (21 entries):
-    #  [2]=collision(SCA), [5]=items/AOT, [2]=cameras already handled
-    _parse_rdt_items_re2(rdt, data, size)
-    _parse_rdt_collision_re2(rdt, data, size)
+    # Collision at sca (RDT_SCA = offsets[6])
+    if sca and sca < size:
+        _parse_collision_at(rdt, data, size, sca)
+
+    # Items/AOT - RE2 uses RDT_SCD1 area or a dedicated AOT section
+    # obj = offsets[10] = RDT_OBJ = static objects placement
+    if obj and obj < size:
+        _parse_aot_at(rdt, data, size, obj)
+
+    # Items also at scd1 in some versions - try if no AOT found
+    if not rdt.aot and scd1 and scd1 < size:
+        _parse_items_re2_from_scd(rdt, data, size, scd1)
+
+    # Enemies
     _parse_rdt_enemies_re2(rdt, data, size)
-    _parse_rdt_aot_re2(rdt, data, size)
     _parse_rdt_camera_switches(rdt, data, size)
 
 
@@ -1050,6 +1196,17 @@ def get_enemy_name(enemy_type: int, game: str = 're1') -> str: #vers 2
 
 # --- Enemy parsers ---
 
+def _parse_items_re2_from_scd(rdt: RDTFile, data: bytes,
+                               size: int, off: int): #vers 1
+    """Parse RE2 item placements from SCD-adjacent data.
+    Called as fallback when AOT parsing finds nothing.
+    Item struct (RE2): type(2) x(2) z(2) w(2) d(2) floor(1) super(1) data[8] = 20 bytes
+    """
+    if off == 0 or off >= size:
+        return
+    _parse_aot_at(rdt, data, size, off)
+
+
 def _parse_rdt_enemies_re1(rdt: RDTFile, data: bytes, size: int): #vers 1
     """Parse RE1 enemy placement from offset[8]."""
     if not rdt.header or len(rdt.header.offsets) < 9:
@@ -1072,11 +1229,18 @@ def _parse_rdt_enemies_re1(rdt: RDTFile, data: bytes, size: int): #vers 1
         off += struct_size
 
 
-def _parse_rdt_enemies_re2(rdt: RDTFile, data: bytes, size: int): #vers 1
-    """Parse RE2 enemy placement from offset[9]."""
+def _parse_rdt_enemies_re2(rdt: RDTFile, data: bytes, size: int): #vers 2
+    """Parse RE2 enemy placement.
+    From Room.h: enemies are in RDT_OBJ section (offsets[10]).
+    The OBJ section contains AOT + item + enemy data sequentially.
+    We scan for valid enemy entries after AOT data.
+    Falls back to scanning offset[9] (RDT_FLR adjacent area).
+    """
     if not rdt.header or len(rdt.header.offsets) < 10:
         return
-    off = rdt.header.offsets[9]
+    # Try RDT_LIT (offsets[9]) which is near enemy data in practice
+    for idx in [9, 8, 11]:
+        off = rdt.header.offsets[idx] if idx < len(rdt.header.offsets) else 0
     if off == 0 or off >= size:
         return
     struct_size = 16

@@ -22,6 +22,89 @@ from typing import Optional, Dict, Tuple
 ##class ItemIconCache:
 
 
+# RE1 icon grid from RE1-Mod-SDK xml/item.xml (icon_id / 10 = row, icon_id % 10 = col)
+# ITEM_ALL.PIX is 240x180, icons are 24x24, 10 per row
+RE1_ICON_GRID: dict = {
+    0x00: (0, 0),
+    0x01: (1, 0),
+    0x02: (2, 0),
+    0x03: (3, 0),
+    0x04: (4, 0),
+    0x05: (4, 0),
+    0x06: (5, 0),
+    0x07: (6, 0),
+    0x08: (6, 0),
+    0x09: (6, 0),
+    0x0A: (7, 0),
+    0x0B: (8, 0),
+    0x0C: (9, 0),
+    0x0D: (0, 1),
+    0x0E: (1, 1),
+    0x0F: (2, 1),
+    0x10: (3, 1),
+    0x11: (4, 1),
+    0x12: (5, 1),
+    0x13: (6, 1),
+    0x14: (7, 1),
+    0x15: (8, 1),
+    0x16: (9, 1),
+    0x17: (0, 2),
+    0x18: (1, 2),
+    0x19: (2, 2),
+    0x1A: (3, 2),
+    0x1B: (4, 2),
+    0x1C: (5, 2),
+    0x1D: (6, 2),
+    0x1E: (7, 2),
+    0x1F: (8, 2),
+    0x20: (9, 2),
+    0x21: (0, 3),
+    0x22: (1, 3),
+    0x23: (2, 3),
+    0x24: (3, 3),
+    0x25: (4, 3),
+    0x26: (5, 3),
+    0x27: (6, 3),
+    0x28: (7, 3),
+    0x29: (8, 3),
+    0x2A: (9, 3),
+    0x2B: (0, 4),
+    0x2C: (1, 4),
+    0x2D: (2, 4),
+    0x2E: (3, 4),
+    0x2F: (4, 4),
+    0x30: (5, 4),
+    0x31: (6, 4),
+    0x32: (7, 4),
+    0x33: (8, 4),
+    0x34: (9, 4),
+    0x35: (0, 5),
+    0x36: (1, 5),
+    0x37: (2, 5),
+    0x38: (3, 5),
+    0x39: (4, 5),
+    0x3A: (5, 5),
+    0x3B: (6, 5),
+    0x3C: (7, 5),
+    0x3D: (8, 5),
+    0x3E: (9, 5),
+    0x3F: (0, 6),
+    0x40: (1, 6),
+    0x41: (2, 6),
+    0x42: (3, 6),
+    0x43: (4, 6),
+    0x44: (5, 6),
+    0x45: (6, 6),
+    0x46: (7, 6),
+    0x47: (8, 6),
+    0x48: (9, 6),
+    0x49: (0, 7),
+    0x4A: (1, 7),
+    0x4B: (2, 7),
+    0x4C: (3, 7),
+    0x4D: (4, 7),
+}
+
 # RE2 STATUS.TIM icon grid layout
 # Each icon slot is 32x32 pixels (before scaling)
 # Grid is 8 icons wide, rows from top
@@ -102,10 +185,13 @@ RE2_ICON_GRID: Dict[int, Tuple[int, int]] = {
     0x44: (7, 7),  # C4 Bomb
 }
 
-# Icon dimensions in STATUS.TIM
-ICON_W = 32
+# Icon dimensions by game
+# RE1: ITEM_ALL.PIX 240x180, 24x24 icons, 10 per row
+# RE2: STATUS.TIM, 32x32 icons, 8 per row
+RE1_ICON_W = 24; RE1_ICON_H = 24; RE1_GRID_W = 10
+ICON_W = 32   # RE2 default
 ICON_H = 32
-GRID_W = 8   # icons per row
+GRID_W = 8
 
 
 class ItemIconCache: #vers 1
@@ -165,32 +251,37 @@ class ItemIconCache: #vers 1
         return False
 
     def get_icon(self, item_type: int,
-                 size: int = 24) -> Optional[object]: #vers 1
-        """Return QPixmap icon for item_type, scaled to size x size.
-        Returns None if not available.
-        """
-        cache_key = (item_type, size)
+                 size: int = 24,
+                 game: str = 're2') -> Optional[object]: #vers 2
+        """Return QPixmap icon for item_type, scaled to size x size."""
+        cache_key = (item_type, size, game)
         if cache_key in self._cache:
             return self._cache[cache_key]
 
         if not self._loaded or self._sheet is None:
             return None
 
-        grid_pos = RE2_ICON_GRID.get(item_type)
+        if game == 're1':
+            grid_pos = RE1_ICON_GRID.get(item_type)
+            iw, ih = RE1_ICON_W, RE1_ICON_H
+        else:
+            grid_pos = RE2_ICON_GRID.get(item_type)
+            iw, ih = ICON_W, ICON_H
+
         if grid_pos is None:
             return None
 
         col, row = grid_pos
-        x = col * ICON_W
-        y = row * ICON_H
+        x = col * iw
+        y = row * ih
 
-        if x + ICON_W > self._sheet.width() or y + ICON_H > self._sheet.height():
+        if x + iw > self._sheet.width() or y + ih > self._sheet.height():
             return None
 
         try:
             from PyQt6.QtGui import QPixmap
             from PyQt6.QtCore import QRect
-            cropped = self._sheet.copy(QRect(x, y, ICON_W, ICON_H))
+            cropped = self._sheet.copy(QRect(x, y, iw, ih))
             pixmap  = QPixmap.fromImage(cropped).scaled(
                 size, size,
                 aspectRatioMode=__import__('PyQt6.QtCore', fromlist=['Qt']).Qt.AspectRatioMode.KeepAspectRatio,
