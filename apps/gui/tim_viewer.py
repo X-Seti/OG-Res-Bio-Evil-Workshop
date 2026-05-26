@@ -79,8 +79,12 @@ class TIMCanvas(QWidget): #vers 1
                              "No TIM loaded\nOpen a .tim file or select from RDT")
             return
 
-        iw = int(self._pixmap.width()  * self._zoom)
-        ih = int(self._pixmap.height() * self._zoom)
+        if self._pixmap.isNull():
+            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter,
+                             "Failed to load image")
+            return
+        iw = max(1, int(self._pixmap.width()  * self._zoom))
+        ih = max(1, int(self._pixmap.height() * self._zoom))
         scaled = self._pixmap.scaled(iw, ih,
             Qt.AspectRatioMode.IgnoreAspectRatio,
             Qt.TransformationMode.FastTransformation)

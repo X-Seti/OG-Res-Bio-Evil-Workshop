@@ -207,7 +207,7 @@ class RDTFile: #vers 1
 
 @dataclass
 class TIMHeader: #vers 1
-    magic: int       # 0x10000000
+    magic: int       # 0x00000010 (byte[0]=0x10, little-endian)
     flags: int
     bpp: int         # derived from flags bits 0-2
     has_clut: bool   # derived from flags bit 3
@@ -943,8 +943,10 @@ def parse_tim(file_path: str) -> TIMFile: #vers 1
             raise RE1FormatError("TIM too small")
 
         magic, flags = struct.unpack_from('<II', data, 0)
-        if magic != 0x10000000:
-            raise RE1FormatError(f"Bad TIM magic: 0x{magic:08X}")
+        # TIM magic = 0x10 in byte 0 (little-endian uint32 = 0x00000010)
+        # Also accept 0x08 (some PC TIMs use a variant header)
+        if magic not in (0x00000010, 0x00000008, 0x00000011):
+            raise RE1FormatError(f"Bad TIM magic: 0x{magic:08X} (expected 0x00000010)")
 
         bpp_mode = flags & 0x07
         has_clut = bool(flags & 0x08)

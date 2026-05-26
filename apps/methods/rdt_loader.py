@@ -31,10 +31,15 @@ if TYPE_CHECKING:
 # get_room_summary_text
 # setup_middle_table_columns
 
-def load_rdt_file(main_window: 'ResBioEvilWorkshop', file_path: str) -> Optional[RDTFile]: #vers 1
-    """Load an RDT file and update the main window UI."""
+def load_rdt_file(main_window: 'ResBioEvilWorkshop', file_path: str) -> Optional[RDTFile]: #vers 2
+    """Load an RDT/ARD file and update the main window UI."""
     if not os.path.exists(file_path):
         print(f"RDT Loader: File not found: {file_path}")
+        return None
+
+    ext = os.path.splitext(file_path)[1].upper()
+    if ext not in ('.RDT', '.ARD'):
+        print(f"RDT Loader: Not an RDT file: {file_path}")
         return None
 
     rdt = parse_rdt(file_path)
