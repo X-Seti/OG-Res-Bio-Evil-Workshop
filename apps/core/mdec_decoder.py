@@ -326,37 +326,137 @@ def _decode_bs_impl(data: bytes, width: int, height: int) -> bytes: #vers 1
     return bytes(out)
 
 
-def decode_bss_background(path: str) -> Optional[Tuple[bytes, int, int]]: #vers 1
-    """Load and decode a BSS background file.
-    Returns (rgba_bytes, width, height) or None.
+def decode_bss_background(path: str) -> Optional[Tuple[bytes, int, int]]: #vers 2
+    """Decode a RE BSS background file (PS1 MDEC/BS frames).
 
-    BSS file structure:
-      BS header (variable) + MDEC bitstream
-    Width/height for RE1/RE2 backgrounds: 320x240 standard
+    BSS format: N × 0x10000-byte frames (one per camera angle).
+    Each frame: quant_scale(2) + 0x3800(2) + num_words(4) + BS bitstream.
+    Decodes to 320×240 RGBA using ffmpeg mdec codec.
+
+    Returns list of (rgba_bytes, 320, 240) tuples — one per camera.
+    First tuple returned directly for single-frame compatibility.
     """
+    import subprocess, struct, os, tempfile
+
     try:
         with open(path, 'rb') as f:
             data = f.read()
-
-        if len(data) < 8:
-            return None
-
-        # RE backgrounds are always 320x240
-        # Some have a 4-byte file header before the BS data
-        width, height = 320, 240
-
-        # Try standard BS decode first
-        rgba = decode_bs(data, width, height)
-        if rgba:
-            return rgba, width, height
-
-        # Try skipping first 4 bytes (some BSS have a pre-header)
-        rgba = decode_bs(data[4:], width, height)
-        if rgba:
-            return rgba, width, height
-
+    except Exception as e:
+        print(f"BSS load error {path}: {e}")
         return None
+
+    FRAME_SIZE = 0x10000
+    if len(data) < FRAME_SIZE:
+        # Try treating whole file as one frame
+        frames_data = [data]
+    else:
+        frames_data = [data[i*FRAME_SIZE:(i+1)*FRAME_SIZE]
+                       for i in range(len(data) // FRAME_SIZE)]
+
+    results = []
+    tmp_dir = tempfile.mkdtemp()
+
+    try:
+        for i, frame in enumerate(frames_data):
+            # Validate BS frame header
+            if len(frame) < 8:
+                continue
+            ver = struct.unpack_from('<H', frame, 2)[0]
+            if ver != 0x3800:
+                continue
+
+            tmp_in  = os.path.join(tmp_dir, f'frame_{i}.bs')
+            tmp_out = os.path.join(tmp_dir, f'frame_{i}.ppm')
+
+            with open(tmp_in, 'wb') as f:
+                f.write(frame)
+
+            result = subprocess.run([
+                'ffmpeg', '-y', '-hide_banner', '-loglevel', 'error',
+                '-f', 'image2', '-vcodec', 'mdec', '-s', '320x240',
+                '-i', tmp_in, tmp_out
+            ], capture_output=True, timeout=10)
+
+            if result.returncode == 0 and os.path.exists(tmp_out):
+                # Parse PPM → RGBA
+                rgba = _ppm_to_rgba(tmp_out)
+                if rgba:
+                    results.append((rgba, 320, 240))
 
     except Exception as e:
-        print(f"BSS background decode error {path}: {e}")
+        print(f"BSS decode error: {e}")
+    finally:
+        import shutil
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    if not results:
         return None
+    # Return first frame (backward compat), store all on second call
+    return results[0]
+
+
+def decode_bss_all_frames(path: str) -> list: #vers 1
+    """Decode all camera frames from a BSS file.
+    Returns list of (rgba_bytes, 320, 240) tuples.
+    """
+    import subprocess, struct, os, tempfile
+
+    results = []
+    try:
+        with open(path, 'rb') as f:
+            data = f.read()
+    except Exception as e:
+        print(f"BSS load error {path}: {e}")
+        return results
+
+    FRAME_SIZE = 0x10000
+    frames_data = [data[i*FRAME_SIZE:(i+1)*FRAME_SIZE]
+                   for i in range(len(data) // FRAME_SIZE)]
+    tmp_dir = tempfile.mkdtemp()
+    try:
+        for i, frame in enumerate(frames_data):
+            if len(frame) < 8: continue
+            ver = struct.unpack_from('<H', frame, 2)[0]
+            if ver != 0x3800: continue
+
+            tmp_in  = os.path.join(tmp_dir, f'f{i}.bs')
+            tmp_out = os.path.join(tmp_dir, f'f{i}.ppm')
+            with open(tmp_in, 'wb') as f:
+                f.write(frame)
+            r = subprocess.run([
+                'ffmpeg', '-y', '-hide_banner', '-loglevel', 'error',
+                '-f', 'image2', '-vcodec', 'mdec', '-s', '320x240',
+                '-i', tmp_in, tmp_out
+            ], capture_output=True, timeout=10)
+            if r.returncode == 0 and os.path.exists(tmp_out):
+                rgba = _ppm_to_rgba(tmp_out)
+                if rgba:
+                    results.append((rgba, 320, 240))
+    finally:
+        import shutil
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+    return results
+
+
+def _ppm_to_rgba(path: str) -> Optional[bytes]: #vers 1
+    """Read a PPM file and return RGBA bytes."""
+    try:
+        with open(path, 'rb') as f:
+            raw = f.read()
+        # Parse PPM header: P6\nW H\n255\n<pixels>
+        lines = raw.split(b'\n', 3)
+        if lines[0] != b'P6': return None
+        w, h = map(int, lines[1].split())
+        pixels = lines[3]  # RGB bytes
+        rgba = bytearray(w * h * 4)
+        for i in range(w * h):
+            rgba[i*4]   = pixels[i*3]
+            rgba[i*4+1] = pixels[i*3+1]
+            rgba[i*4+2] = pixels[i*3+2]
+            rgba[i*4+3] = 255
+        return bytes(rgba)
+    except Exception as e:
+        print(f"PPM parse error {path}: {e}")
+        return None
+
+
