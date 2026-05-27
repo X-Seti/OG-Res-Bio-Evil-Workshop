@@ -166,7 +166,7 @@ def populate_room_table(main_window: 'ResBioEvilWorkshop', rdt: RDTFile): #vers 
         ("Items",         str(len(rdt.items)),            _item_summary(rdt)),
         ("Collision",     str(len(rdt.collision)),        _collision_summary(rdt)),
         ("Sound Banks",   str(rdt.header.num_sound_banks if rdt.header else 0), ""),
-        ("Offsets",       "19",                           _offset_summary(rdt)),
+        ("Offsets", str(len(rdt.header.offsets)) if rdt.header else "0", _offset_summary(rdt)),
         ("Parse Errors",  str(len(rdt.parse_errors)),    '; '.join(rdt.parse_errors) if rdt.parse_errors else "None"),
     ]
 
@@ -378,11 +378,12 @@ def _collision_summary(rdt: RDTFile) -> str: #vers 1
     return f"Types: {sorted(types)}"
 
 
-def _offset_summary(rdt: RDTFile) -> str: #vers 1
+def _offset_summary(rdt: RDTFile) -> str: #vers 2
     if not rdt.header:
         return ""
+    total   = len(rdt.header.offsets)
     nonzero = sum(1 for o in rdt.header.offsets if o != 0)
-    return f"{nonzero}/19 active"
+    return f"{nonzero}/{total} active"
 
 
 def extract_embedded_tims(rdt: RDTFile) -> list: #vers 1

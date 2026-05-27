@@ -1814,8 +1814,16 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         # File list
         self.col_list_widget = QListWidget()
         self.col_list_widget.setAlternatingRowColors(True)
-        self.col_list_widget.itemClicked.connect(self._on_left_file_selected)
-        self.col_list_widget.itemDoubleClicked.connect(self._on_left_file_activated)
+        self.col_list_widget.itemClicked.connect(self._on_left_file_highlight)
+        self.col_list_widget.itemDoubleClicked.connect(self._on_left_file_selected)
+        self.col_list_widget.itemActivated.connect(self._on_left_file_selected)
+        # Enter key on list widget
+        from PyQt6.QtGui import QKeySequence
+        from PyQt6.QtWidgets import QShortcut
+        enter_sc = QShortcut(QKeySequence(Qt.Key.Key_Return), self.col_list_widget)
+        enter_sc.activated.connect(self._on_left_enter_pressed)
+        enter2_sc = QShortcut(QKeySequence(Qt.Key.Key_Enter), self.col_list_widget)
+        enter2_sc.activated.connect(self._on_left_enter_pressed)
         self.col_list_widget.setFont(QFont("Courier New", 8))
         self.col_list_widget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.col_list_widget.customContextMenuRequested.connect(
@@ -1981,8 +1989,31 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         # Keep references alive
         self._stage_loader_refs = [(thread, loader)]
 
-    def _on_left_file_selected(self, item): #vers 3
-        """Single click: route file to correct viewer by extension."""
+    def _on_left_enter_pressed(self): #vers 1
+        """Enter key on left panel list: load selected item."""
+        item = self.col_list_widget.currentItem()
+        if item:
+            self._on_left_file_selected(item)
+
+    def _on_left_file_highlight(self, item): #vers 1
+        """Single click: update status bar with file info only, do not load."""
+        file_path = item.data(Qt.ItemDataRole.UserRole)
+        if not file_path or not os.path.exists(file_path):
+            return
+        ext  = os.path.splitext(file_path)[1].upper()
+        name = os.path.basename(file_path)
+        size = os.path.getsize(file_path)
+        size_str = f"{size//1024}KB" if size >= 1024 else f"{size}B"
+        if hasattr(self, 'status_bar_label'):
+            self.status_bar_label.setText(f"{name}  ({size_str})  — press Enter or double-click to open")
+        elif hasattr(self, 'statusBar'):
+            try:
+                self.statusBar().showMessage(f"{name}  ({size_str})")
+            except Exception:
+                pass
+
+    def _on_left_file_selected(self, item): #vers 4
+        """Double-click / Enter: route file to correct viewer by extension."""
         file_path = item.data(Qt.ItemDataRole.UserRole)
         if not file_path:
             return
@@ -2133,11 +2164,9 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         if hasattr(self, 'middle_tabs'):
             self.middle_tabs.setCurrentIndex(2)  # Cameras tab
 
-    def _on_left_file_activated(self, item): #vers 1
-        """Double-click: load the RDT file."""
-        file_path = item.data(Qt.ItemDataRole.UserRole)
-        if file_path:
-            self._load_rdt(file_path)
+    def _on_left_file_activated(self, item): #vers 2
+        """Legacy — delegates to _on_left_file_selected."""
+        self._on_left_file_selected(item)
 
     def _create_middle_panel(self): #ver 2
         panel = QFrame()
