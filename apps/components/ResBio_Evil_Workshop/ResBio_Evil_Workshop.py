@@ -20,7 +20,7 @@ from PyQt6.QtWidgets import (
 from apps.methods.resbio_svg_icons import ResBioSVGIcons
 from PyQt6.QtCore import Qt, pyqtSignal, QSize, QPoint, QRect, QTimer
 from PyQt6.QtGui import (
-    QFont, QIcon, QPixmap, QColor, QPainter, QPen, QBrush, QAction, QCursor, QKeySequence, QPainterPath)
+    QFont, QIcon, QPixmap, QColor, QPainter, QPen, QBrush, QAction, QCursor, QKeySequence, QShortcut, QPainterPath)
 
 # Add depends/ folder to path so bare 'depends.x' imports work
 _component_dir = os.path.dirname(os.path.abspath(__file__))
