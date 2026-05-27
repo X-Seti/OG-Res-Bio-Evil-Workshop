@@ -7,6 +7,7 @@ Called by ResBio_Evil_Workshop._open_file and _on_room_selected.
 """
 
 import os
+from apps.debug.debug_functions import img_debugger
 from typing import Optional, TYPE_CHECKING
 
 from PyQt6.QtWidgets import (
