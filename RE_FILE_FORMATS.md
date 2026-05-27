@@ -282,16 +282,28 @@ CD_DATA/                      Shared by both scenarios
   DATA/                       Shared textures, item icons
 ```
 
-**ARD vs RDT — same binary format, different content:**
+**ARD vs RDT — different binary formats:**
 
 | File | Path | Contains |
 |------|------|----------|
-| Rxxx.ARD | CD_DATA/STAGE*/ | Cameras + collision only (shared, no items/enemies) |
+| Rxxx.ARD | CD_DATA/STAGE*/ | Collision + BSS camera count (container format) |
 | ROOMxxxx.RDT | PL0/RDT/ or PL1/RDT/ | Full room: cameras + collision + items + enemies + scripts |
 
-The ARD files are the geometry-only shared version. Both Leon and Claire see the
-same room layout and camera angles (defined in ARD), but different item placements
-and enemy counts (defined in scenario RDT).
+ARD files use a **container format** (NOT the same as RDT):
+```
+u32 file_size
+u32 n_sections = 10
+10 × { u32 offset, u8 type, u8 flag, u16 size }
+
+Section types:
+  type=2  SCA collision: Cx(s16)+Cz(s16) + n×8-byte rectangles (x0,z0,x1,z1)
+  type=5  Room data (camera zone triggers, scripts — format TBD)
+  type=6  SCD scripts
+  type=0  Miscellaneous
+```
+
+Camera count = companion BSS file size ÷ 65536 (one 0x10000-byte frame per camera).
+Camera 3D positions are NOT stored — they are implicit in the pre-rendered backgrounds.
 
 **ARD naming convention:**
 ```

@@ -635,10 +635,15 @@ def parse_rdt(file_path: str) -> RDTFile: #vers 4
         if rdt.header is None:
             rdt.header = RDTHeader()
 
+        import os as _os2
+        ext = _os2.path.splitext(file_path)[1].upper()
         if game_ver == 3:
             _parse_rdt_re3(rdt, data, size)
         elif game_ver == 2:
-            _parse_rdt_re2(rdt, data, size)
+            if ext == '.ARD':
+                _parse_ard(rdt, data, size)
+            else:
+                _parse_rdt_re2(rdt, data, size)
         else:
             _parse_rdt_re1(rdt, data, size)
 
@@ -810,6 +815,124 @@ def _parse_re1_items_from_scd(rdt: RDTFile, data: bytes,
         # Advance by 1 if unknown opcode (SCD is complex, we just scan)
         pos += 1
 
+
+
+def _parse_ard(rdt: RDTFile, data: bytes, size: int): #vers 1
+    """Parse RE2 PSX ARD (Archive Room Data) from CD_DATA/STAGE* shared rooms.
+
+    ARD format confirmed from STAGE1 binary analysis:
+      u32 file_size    (= len(data))
+      u32 n_sections   (= 10)
+      10 × section_entry:
+        u32 offset      file offset to section data
+        u8  type        section type (2=SCA collision, 5=AOT/scripts, 6=SCD, 0=misc)
+        u8  flag        0=uncompressed/empty, 2=has real data
+        u16 data_size   size of section data in bytes
+
+    Sections:
+      type=2  SCA collision: Cx(s16)+Cz(s16) then n×8-byte rects (x0,z0,x1,z1)
+      type=5  AOT triggers / camera zone data
+      type=6  SCD scripts
+      type=0  Miscellaneous room data
+
+    Camera count: from companion BSS file (n_frames = BSS_size / 0x10000)
+    Camera positions: NOT stored (pre-rendered rooms, position implicit in background)
+    """
+    import struct as _s
+    import os as _os
+
+    if rdt.header is None:
+        rdt.header = RDTHeader()
+
+    # Validate ARD header
+    if size < 8:
+        rdt.parse_errors.append("ARD too small")
+        return
+
+    fsize   = _s.unpack_from('<I', data, 0)[0]
+    n_secs  = _s.unpack_from('<I', data, 4)[0]
+
+    if fsize != size or n_secs != 10:
+        # Not a valid ARD, try as plain RE2 RDT
+        _parse_rdt_re2(rdt, data, size)
+        return
+
+    rdt.header.offsets = [0] * 23  # fill to RE2 size for compatibility
+
+    # Parse section table
+    for i in range(10):
+        off_e   = 8 + i * 8
+        sec_off = _s.unpack_from('<I', data, off_e)[0]
+        sec_typ = data[off_e + 4]
+        sec_flg = data[off_e + 5]
+        sec_sz  = _s.unpack_from('<H', data, off_e + 6)[0]
+
+        if sec_off < 0x80 or sec_off + sec_sz > size:
+            continue  # null / empty section
+
+        # --- SCA collision (type=2) ---
+        if sec_typ == 2:
+            if sec_sz < 4:
+                continue
+            cx = _s.unpack_from('<h', data, sec_off)[0]
+            cz = _s.unpack_from('<h', data, sec_off + 2)[0]
+            n_col = (sec_sz - 4) // 8
+            for j in range(n_col):
+                off_c = sec_off + 4 + j * 8
+                if off_c + 8 > size:
+                    break
+                x0, z0, x1, z1 = _s.unpack_from('<4h', data, off_c)
+                rdt.collision.append(RDTCollisionBoundary(
+                    boundary_type=0, x1=x0, z1=z0, x2=x1, z2=z1,
+                    floor=0, density=0, sound_attr=0,
+                ))
+
+        # type=5 sections contain camera/stage-specific data in a format
+        # not yet fully decoded. Skip for now.
+        # TODO: identify type=5 section format for AOT/trigger data
+
+    # Camera count from companion BSS file
+    bss_path = rdt.file_path.rsplit('.', 1)[0] + '.BSS'
+    if not _os.path.exists(bss_path):
+        bss_path = rdt.file_path.rsplit('.', 1)[0] + '.bss'
+    if _os.path.exists(bss_path):
+        try:
+            bss_size = _os.path.getsize(bss_path)
+            n_cams   = bss_size // 0x10000
+            rdt.header.num_cameras = n_cams
+            for i in range(n_cams):
+                rdt.cameras.append(RDTCamera(
+                    camera_index=i,
+                    from_x=0, from_y=0, from_z=0,
+                    to_x=0,   to_y=0,   to_z=0,
+                ))
+        except OSError:
+            pass
+
+
+def _parse_ard_aot(rdt: RDTFile, data: bytes,
+                   sec_off: int, sec_sz: int): #vers 1
+    """Parse AOT trigger zones from ARD type=5 section.
+    Same 20-byte AOT format as RVD section in PL0/RDT files:
+    SCE(1)+SAT(1)+nFloor(1)+super(1)+x(2)+z(2)+w(2)+d(2)+data[8], terminated by 0xFF.
+    """
+    import struct as _s
+    off = sec_off
+    end = sec_off + sec_sz
+    while off + 20 <= end:
+        sce = data[off]
+        if sce == 0xFF:
+            break
+        sat    = data[off + 1]
+        nfloor = data[off + 2]
+        sup    = data[off + 3]
+        x, z, w, d = _s.unpack_from('<4h', data, off + 4)
+        ex = list(data[off + 12: off + 20])
+        rdt.aot.append(RDTAot(
+            aot_type=sce, x=x, z=z, w=w, d=d,
+            floor=nfloor, super_type=sup, data=ex,
+        ))
+        off += 20
 
 
 def _parse_rdt_re2(rdt: RDTFile, data: bytes, size: int): #vers 3
