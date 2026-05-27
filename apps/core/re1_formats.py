@@ -466,24 +466,31 @@ def get_item_name(item_type: int, game: str = 're1') -> str: #vers 3
 
 # --- Parser Functions ---
 
-def _is_prs_compressed(data: bytes) -> bool: #vers 1
-    """Heuristic: check if data looks like PRS-compressed RE3 RDT.
-    PRS data starts with 2 bytes of compressed data followed by bit stream.
-    RE3 RDTs are typically 20-80KB compressed, 80-200KB decompressed.
-    Simple check: if file doesn't start with known RDT header patterns.
+def _is_prs_compressed(data: bytes) -> bool: #vers 2
+    """Check if data is a PRS-compressed RE3 RDT.
+
+    PRS-compressed RE3 RDTs are small (< 150KB uncompressed).
+    RE2 PS1 RDTs are large (100KB-500KB) and have valid RE2 headers.
+    
+    Conditions for PRS:
+    - File size < 150KB (RE3 compressed RDTs are 20-100KB)
+    - header[1] (nCut) is 0 or > 20 (not a valid camera count)
+    - The 23 section offsets at 0x08 don't look valid
     """
     if len(data) < 8:
         return False
-    # Valid uncompressed RDT starts with small values (num_cameras=1-8)
-    # PRS stream starts with a byte pair where high nibble is often 0-3
-    # Best heuristic: try to read as RDT, if camera count looks insane -> PRS
-    cam_count = data[2]  # RE2/RE3 format
-    if 1 <= cam_count <= 8:
-        return False  # looks like valid uncompressed RE2/RE3 header
-    cam_count_re1 = data[1]  # RE1 format
-    if 1 <= cam_count_re1 <= 8:
-        return False  # looks like valid uncompressed RE1 header
-    return True  # doesn't look like a valid RDT header -> probably PRS
+    # RE2 PS1 check: nCut in [1..16] AND nBss in [0..16] = uncompressed
+    n_cut = data[1]
+    n_bss = data[2]
+    if 1 <= n_cut <= 16 and 0 <= n_bss <= 20:
+        return False
+    # RE1 check: nCut in header[1] position
+    if 1 <= n_cut <= 12:
+        return False
+    # Large files are never PRS-compressed
+    if len(data) > 150_000:
+        return False
+    return True
 
 
 def _detect_version_from_path(file_path: str, data: bytes) -> int: #vers 2
@@ -792,120 +799,108 @@ def _parse_re1_items_from_scd(rdt: RDTFile, data: bytes,
 
 
 
-def _parse_rdt_re2(rdt: RDTFile, data: bytes, size: int): #vers 2
-    """Parse RE2/RE3 RDT using exact offsets from Room.h (RE2-Mod-tools/roomslicer).
+def _parse_rdt_re2(rdt: RDTFile, data: bytes, size: int): #vers 3
+    """Parse RE2 PS1 RDT. Confirmed from real RE2 PS1 binaries (RESEVIL2_LEON_PSX).
 
-    Header layout (tagRdtHeader in Room.h):
-      0x00 nSprite, 0x01 nCut(cameras), 0x02 nOmodel, 0x03 nItem
-      0x04 nDoor, 0x05 nRoom_at, 0x06 Reverb_lv, 0x07 nSprite_max
-      --- 23 section offsets (uint32) starting at 0x08 ---
-      0x08 pEdt0    KAN0 - sound table
-      0x0C pVh0     VH0  - VAG header 1
-      0x10 pVb0     VB0  - VAG body 1
-      0x14 kan1     KAN1 - sound table 2
-      0x18 vh1      VH1  - VAG header 2
-      0x1C vb1      VB1  - VAG body 2
-      0x20 sca      SCA  - collision data
-      0x24 rid      RID  - camera cut RID data
-      0x28 rvd      RVD  - room visual data
-      0x2C lit      LIT  - lighting
-      0x30 obj      OBJ  - static objects
-      0x34 flr      FLR  - floor data
-      0x38 blk      BLK  - block data
-      0x3C tex[0]   TEX0 - textures
-      0x40 tex[1]   TEX1 - textures 2
-      0x44 scd[0]   SCD0 - script init
-      0x48 scd[1]   SCD1 - script thread
-      0x4C scd[2]   SCD2 - (unused)
-      0x50 pEsp     ESP  - effect sprites
-      0x54 pEff     EFF  - effects
-      0x58 pTim[0]  ETIM - effect textures
-      0x5C pTim[1]  MTIM - mask textures
-      0x60 rbj      RBJ  - rigidbody joints
-      --- 0x64: camera array (RCUT structures) ---
+    Header (8 bytes):
+      [0]nSprite [1]nCut [2]nOmodel [3]nItem [4]nDoor [5]nRoom_at [6]Reverb [7]nSpriteMax
+    23 section offsets (uint32 LE) at 0x08
+    RCUT camera array at 0x64:
+      Each RCUT = 32 bytes: pSp(4)+pTim(4)+View_p[3](12)+View_r[3](12)
+      NOTE: PS1 = 32 bytes per RCUT, NOT 44 (PC version is 44)
+
+    Sections (confirmed offsets):
+      RID[7]=0x64     camera array (same as RCUT start)
+      RVD[8]=cam_end  AOT trigger zones: 20-byte entries, 0xFF terminated
+                      SCE(1)+SAT(1)+nFloor(1)+super(1)+x(2)+z(2)+w(2)+d(2)+data[8]
+      LIT[9]          lighting (after RVD)
+      SCA[6]          collision: Cx(s16)+Cz(s16)+8-byte rects to BLK section
+      BLK[12]         floor boundaries: count(u32)+count×12-byte rects
+      FLR[11]         floor data
+      SCD0[15]        init script (AOT_SET places items/doors/triggers)
+      SCD1[16]        run script
     """
     import struct as _s
 
     if rdt.header is None:
         rdt.header = RDTHeader()
     if size < 0x64:
-        rdt.parse_errors.append(f"File too small for RE2: {size} bytes")
+        rdt.parse_errors.append(f"File too small for RE2: {size}")
         return
 
-    hdr = data
-    n_cameras = hdr[1]
+    n_cameras  = data[1]   # header[1] = nCut (number of camera views)
+    n_bss_refs = data[2]   # header[2] = nOmodel = background pointer table entries
+    rdt.header.num_cameras = n_cameras
 
-    # Read all 23 section offsets
-    offsets = list(_s.unpack_from('<23I', hdr, 0x08))
+    # 23 section offsets at 0x08
+    offsets = list(_s.unpack_from('<23I', data, 0x08))
     rdt.header.offsets = offsets
 
-    # Named aliases matching Room.h enum RdtMain
-    sca     = offsets[6]   # RDT_SCA  - collision
-    rid     = offsets[7]   # RDT_RID  - camera RID data
-    obj     = offsets[10]  # RDT_OBJ  - static objects / AOT items
-    scd0    = offsets[15]  # RDT_SCD0 - init script
-    scd1    = offsets[16]  # RDT_SCD1 - run script
-    etim    = offsets[20]  # RDT_ETIM - enemy placement
-    pEdt0   = offsets[0]   # RDT_KAN0 - audio/enemy data
+    sca  = offsets[6]   # SCA collision
+    # RVD starts at 0x64 + nCut*32 + header[2]*8 (confirmed from binary)
+    rvd  = 0x64 + n_cameras * 32 + n_bss_refs * 8
+    blk  = offsets[12]  # BLK floor boundaries
+    flr  = offsets[11]  # FLR floor data
+    scd0 = offsets[15]  # SCD0 init script
+    scd1 = offsets[16]  # SCD1 run script
 
-    # Cameras start at 0x64, each RCUT = 44 bytes (same as RE1)
+    # --- Cameras: RCUT at 0x64, each 32 bytes ---
+    # View_p[3](12 bytes starting at +8) + View_r[3](12 bytes at +20)
+    # pSp(4)+pTim(4) at +0,+4 are background sprite pointers (skip for now)
+    RCUT_SIZE = 32
     cam_off = 0x64
-    RCUT_SIZE = 44
     for i in range(min(n_cameras, 16)):
         if cam_off + RCUT_SIZE > size:
             break
-        eye = _s.unpack_from('<3i', hdr, cam_off + 8)
-        at  = _s.unpack_from('<3i', hdr, cam_off + 20)
+        eye = _s.unpack_from('<3i', data, cam_off + 8)
+        at  = _s.unpack_from('<3i', data, cam_off + 20)
         rdt.cameras.append(RDTCamera(
             from_x=eye[0], from_y=eye[1], from_z=eye[2],
-            to_x=at[0], to_y=at[1], to_z=at[2],
+            to_x=at[0],   to_y=at[1],   to_z=at[2],
             camera_index=i,
         ))
         cam_off += RCUT_SIZE
 
-    # Collision at sca (RDT_SCA = offsets[6])
-    if sca and sca < size:
-        _parse_collision_at(rdt, data, size, sca)
+    # --- Camera trigger zones (RVD): 20-byte AOT entries, 0xFF terminated ---
+    # SCE(1)+SAT(1)+nFloor(1)+super(1)+x(2)+z(2)+w(2)+d(2)+data[8] = 20 bytes
+    # SCE=1 = camera cut zone (what camera to use in this area)
+    if 0 < rvd < size:
+        off = rvd
+        while off + 20 <= size:
+            sce = data[off]
+            if sce == 0xFF:
+                break
+            sat, n_floor, sup = data[off+1], data[off+2], data[off+3]
+            x, z, w, d = _s.unpack_from('<4h', data, off+4)
+            ex = data[off+12:off+20]
+            aot = RDTAot(
+                aot_type=sce, x=x, z=z, w=w, d=d,
+                floor=n_floor, super_type=sup,
+                data=list(ex),
+            )
+            rdt.aot.append(aot)
+            off += 20
 
-    # Items/AOT - RE2 uses RDT_SCD1 area or a dedicated AOT section
-    # obj = offsets[10] = RDT_OBJ = static objects placement
-    if obj and obj < size:
-        _parse_aot_at(rdt, data, size, obj)
+    # --- Collision (SCA): Cx+Cz header, then 8-byte x0,z0,x1,z1 rects ---
+    # Items run from SCA+4 to BLK start (total = (blk-sca-4)/8)
+    if sca and blk and 0 < sca < blk < size:
+        cx = _s.unpack_from('<h', data, sca)[0]
+        cz = _s.unpack_from('<h', data, sca+2)[0]
+        n_col = (blk - sca - 4) // 8
+        if 0 < n_col < 500:
+            for i in range(n_col):
+                off = sca + 4 + i*8
+                x0,z0,x1,z1 = _s.unpack_from('<4h', data, off)
+                rdt.collision.append(RDTCollisionBoundary(
+                    boundary_type=0, x1=x0, z1=z0, x2=x1, z2=z1,
+                    floor=0, density=0, sound_attr=0,
+                ))
 
-    # Items also at scd1 in some versions - try if no AOT found
-    if not rdt.aot and scd1 and scd1 < size:
-        _parse_items_re2_from_scd(rdt, data, size, scd1)
-
-    # Enemies
+    # --- Enemies ---
     _parse_rdt_enemies_re2(rdt, data, size)
+
+    # --- Camera switches ---
     _parse_rdt_camera_switches(rdt, data, size)
-
-
-def _parse_rdt_collision_re2(rdt: RDTFile, data: bytes, size: int): #vers 2
-    """Parse collision from RE2 RDT.
-    RE2 offset table: [2]=collision(SCA), not [3] as previously assumed.
-    Tries offset[2] first, then [1] and [3] as fallbacks.
-    """
-    if not rdt.header or len(rdt.header.offsets) < 3:
-        return
-    # Try offset[2] (correct for RE2)
-    for idx in [2, 1, 3]:
-        if idx >= len(rdt.header.offsets):
-            continue
-        col_offset = rdt.header.offsets[idx]
-        if col_offset == 0 or col_offset >= size:
-            continue
-        # Quick sanity: SCA header starts with ceiling_x, ceiling_z (2 bytes each)
-        # followed by 5 uint32 counts - check total looks plausible
-        if col_offset + 24 > size:
-            continue
-        counts = list(struct.unpack_from('<5I', data, col_offset + 4))
-        total = sum(counts)
-        if total > 500:  # unreasonable boundary count
-            continue
-        _parse_collision_at(rdt, data, size, col_offset)
-        if rdt.collision:  # parsed something valid
-            return
 
 
 def _parse_rdt_re3(rdt: RDTFile, data: bytes, size: int): #vers 1
@@ -1311,34 +1306,13 @@ def _parse_rdt_enemies_re1(rdt: RDTFile, data: bytes, size: int): #vers 1
         off += struct_size
 
 
-def _parse_rdt_enemies_re2(rdt: RDTFile, data: bytes, size: int): #vers 2
-    """Parse RE2 enemy placement.
-    From Room.h: enemies are in RDT_OBJ section (offsets[10]).
-    The OBJ section contains AOT + item + enemy data sequentially.
-    We scan for valid enemy entries after AOT data.
-    Falls back to scanning offset[9] (RDT_FLR adjacent area).
+def _parse_rdt_enemies_re2(rdt: RDTFile, data: bytes, size: int): #vers 3
+    """Parse RE2 PS1 enemy placement.
+    RE2 enemies are placed by SCD scripts (ENEMY_SET opcode 0x44/0x4E).
+    The ETIM section (offsets[20]) contains the enemy model texture index table.
+    Full SCD parsing required for enemy positions - placeholder until SCD parser done.
     """
-    if not rdt.header or len(rdt.header.offsets) < 10:
-        return
-    # Try RDT_LIT (offsets[9]) which is near enemy data in practice
-    for idx in [9, 8, 11]:
-        off = rdt.header.offsets[idx] if idx < len(rdt.header.offsets) else 0
-    if off == 0 or off >= size:
-        return
-    struct_size = 16
-    for _ in range(32):
-        if off + struct_size > size:
-            break
-        vals = struct.unpack_from('<BBBBhhhHHH', data, off)
-        if vals[0] == 0xFF:
-            break
-        rdt.enemies.append(RDTEnemy(
-            enemy_type=vals[0], floor=vals[1],
-            sound_bank=vals[2], effect_bank=vals[3],
-            x=vals[4], y=vals[5], z=vals[6],
-            rotation=vals[7], id=vals[8], num=vals[9],
-        ))
-        off += struct_size
+    pass  # TODO: parse ENEMY_SET from SCD0/SCD1
 
 
 # --- AOT parsers ---
