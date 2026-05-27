@@ -1818,8 +1818,6 @@ class ResBioEvilWorkshop(QWidget): #ver 1
         self.col_list_widget.itemDoubleClicked.connect(self._on_left_file_selected)
         self.col_list_widget.itemActivated.connect(self._on_left_file_selected)
         # Enter key on list widget
-        from PyQt6.QtGui import QKeySequence
-        from PyQt6.QtWidgets import QShortcut
         enter_sc = QShortcut(QKeySequence(Qt.Key.Key_Return), self.col_list_widget)
         enter_sc.activated.connect(self._on_left_enter_pressed)
         enter2_sc = QShortcut(QKeySequence(Qt.Key.Key_Enter), self.col_list_widget)
