@@ -256,9 +256,11 @@ def populate_info_panel(main_window: 'ResBioEvilWorkshop', rdt: RDTFile): #vers 
         main_window.info_name.setReadOnly(True)
 
     if hasattr(main_window, 'info_format'):
-        cam_count = len(rdt.cameras)
+        cam_count  = len(rdt.cameras)
         item_count = len(rdt.items)
-        main_window.info_format.setText(f"Cams: {cam_count}  Items: {item_count}")
+        col_count  = len(rdt.collision)
+        main_window.info_format.setText(
+            f"Cams:{cam_count}  Items:{item_count}  Col:{col_count}")
 
 
 def get_room_summary_text(rdt: RDTFile) -> str: #vers 1

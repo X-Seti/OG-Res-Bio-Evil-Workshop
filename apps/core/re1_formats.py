@@ -505,11 +505,17 @@ def _detect_version_from_path(file_path: str, data: bytes) -> int: #vers 2
     """
     import os
     path_up  = file_path.upper()
+    ext      = os.path.splitext(file_path)[1].upper()
     fname    = os.path.splitext(os.path.basename(file_path))[0].upper()
     folder   = os.path.dirname(file_path)
     folder_n = os.path.basename(folder).upper()
     parent   = os.path.dirname(folder)
     parent_n = os.path.basename(parent).upper()
+
+    # .ARD files = RE2 PS1 shared stage rooms (CD_DATA/STAGE*/Rxxx.ARD)
+    # Same binary format as RE2 PS1 RDT. Always version 2.
+    if ext == '.ARD':
+        return 2
 
     # RE3 PC: DATA/STAGE/ subfolder (folder name starts with STAGE, parent is DATA)
     if folder_n.startswith('STAGE') and parent_n == 'DATA':
