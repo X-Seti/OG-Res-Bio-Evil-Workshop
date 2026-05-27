@@ -517,6 +517,13 @@ def _detect_version_from_path(file_path: str, data: bytes) -> int: #vers 2
     if ext == '.ARD':
         return 2
 
+    # CD_DATA/STAGE* path = RE2 PS1 shared stage area (both scenarios)
+    # Covers any room file in CD_DATA/STAGEn/ even if extension varies
+    if parent_n == 'CD_DATA' and folder_n.startswith('STAGE'):
+        return 2
+    if 'CD_DATA' in path_up and folder_n.startswith('STAGE'):
+        return 2
+
     # RE3 PC: DATA/STAGE/ subfolder (folder name starts with STAGE, parent is DATA)
     if folder_n.startswith('STAGE') and parent_n == 'DATA':
         return 3

@@ -254,6 +254,58 @@ string tables, and some hardcoded room/item data. Require Wine on Linux.
 
 ---
 
+## RE2 PSX disc structure
+
+RE2 PSX splits room data across two areas of the disc:
+
+```
+PL0/                          Leon A scenario
+  RDT/ROOMxxxx.RDT            Leon rooms: items, enemies, scripts, cameras, collision
+  PLD/PL00.PLD                Leon player model
+  VOICE/VOICE00.XAS           Leon voice lines
+
+PL1/                          Claire B scenario  
+  RDT/ROOMxxxx.RDT            Claire rooms (different items/enemies, same geometry)
+
+CD_DATA/                      Shared by both scenarios
+  STAGE1/                     Police Station
+    R10A.ARD  R10A.BSS        Room 0A: cameras+collision + background frames
+    R10B.ARD  R10B.BSS        Room 0B
+    ...
+  STAGE2/                     Sewers
+    R20A.ARD  R20A.BSS
+    R218.ARD  R218.BSS        Room 18 (sewer corridor, 16 cameras)
+  STAGE3/                     Laboratory
+  STAGE4-7/                   Other stages
+  SOUND/                      BGM, SFX banks
+  DOOR/                       Door models
+  DATA/                       Shared textures, item icons
+```
+
+**ARD vs RDT — same binary format, different content:**
+
+| File | Path | Contains |
+|------|------|----------|
+| Rxxx.ARD | CD_DATA/STAGE*/ | Cameras + collision only (shared, no items/enemies) |
+| ROOMxxxx.RDT | PL0/RDT/ or PL1/RDT/ | Full room: cameras + collision + items + enemies + scripts |
+
+The ARD files are the geometry-only shared version. Both Leon and Claire see the
+same room layout and camera angles (defined in ARD), but different item placements
+and enemy counts (defined in scenario RDT).
+
+**ARD naming convention:**
+```
+R[stage][room_hex]  →  e.g. R218 = stage 2, room 0x18
+Corresponds to:         ROOM218x.RDT in PL0/PL1 (x = scenario 0 or 1)
+```
+
+**BSS naming:**
+```
+R10A.BSS = backgrounds for room 0A in stage 1
+Contains multiple camera angle frames (16 × 0x10000 bytes each)
+One BSS file serves both scenarios (shared background)
+```
+
 ## How a room loads (runtime sequence)
 
 ```
