@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-#This goes in root/apps/utils/app_settings_system.py - version 69
+#This goes in root/apps/utils/app_settings_system.py - version 82
 # $vers" X-Seti - June26, 2025 - App Factory - Package theme settings
 
 """
@@ -1348,17 +1348,19 @@ class _DraggableSwatch(QLabel): #vers 1
         drag.exec(Qt.DropAction.CopyAction)
         self._drag_start = None
 
-class ThemeColorEditor(QWidget): #vers 5
+class ThemeColorEditor(QWidget): #vers 6
     """Widget for editing individual theme colors.
     Swatch supports drag-and-drop: drag from swatch to copy colour to another row."""
     colorChanged = pyqtSignal(str, str)  # color_key, hex_color
     lockChanged = pyqtSignal(str, bool)  # color_key, is_locked
+    alphaChanged = pyqtSignal(str, int)  # color_key, 0-100
 
-    def __init__(self, color_key, color_name, current_value, parent=None): #vers 4
+    def __init__(self, color_key, color_name, current_value, parent=None, alpha=None): #vers 5
         super().__init__(parent)
         self.color_key = color_key
         self.color_name = color_name
         self.current_value = current_value
+        self.alpha = alpha            # None = colour has no transparency
         self.is_locked = False
         self.setAcceptDrops(True)
         self._setup_ui()
@@ -1382,6 +1384,20 @@ class ThemeColorEditor(QWidget): #vers 5
         name_label.setSizePolicy(_SP.Policy.Expanding, _SP.Policy.Preferred)
         layout.addWidget(name_label)
 
+        # Transparency 0-100 (background colours only; blank keeps columns aligned)
+        from PyQt6.QtWidgets import QToolButton
+        self.alpha_btn = QToolButton()
+        self.alpha_btn.setFixedSize(64, 28)
+        self.alpha_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        if self.alpha is None:
+            self.alpha_btn.setEnabled(False)
+            self.alpha_btn.setAutoRaise(True)
+        else:
+            self.alpha_btn.setToolTip("Transparency: click to set 0-100 (100 = solid)")
+            self.alpha_btn.clicked.connect(self._pick_alpha)
+            self._show_alpha()
+        layout.addWidget(self.alpha_btn)
+
         # Color preview swatch — drag source
         self.color_preview = _DraggableSwatch(self)
         self.color_preview.setFixedSize(28, 28)
@@ -1404,6 +1420,46 @@ class ThemeColorEditor(QWidget): #vers 5
         dialog_btn.clicked.connect(self.open_color_dialog)
         layout.addWidget(dialog_btn)
         # NO addStretch() — name_label expansion handles alignment
+
+    def _show_alpha(self): #vers 1
+        """Alpha button: colour over a checkerboard at the set opacity, and the value."""
+        from PyQt6.QtGui import QPixmap, QPainter, QIcon
+        pm = QPixmap(16, 16)
+        p = QPainter(pm)
+        for y in range(0, 16, 4):
+            for x in range(0, 16, 4):
+                p.fillRect(x, y, 4, 4, QColor("#bbbbbb") if (x + y) // 4 % 2 else QColor("#ffffff"))
+        c = QColor(self.current_value if QColor(self.current_value).isValid() else "#000000")
+        c.setAlphaF(self.alpha / 100.0)
+        p.fillRect(0, 0, 16, 16, c)
+        p.end()
+        self.alpha_btn.setIcon(QIcon(pm))
+        self.alpha_btn.setText(f"{self.alpha}")
+
+    def set_alpha(self, value): #vers 1
+        """Set transparency 0-100 without emitting."""
+        if self.alpha is not None:
+            self.alpha = int(value)
+            self._show_alpha()
+
+    def _pick_alpha(self): #vers 1
+        """Pop-up slider 0-100 under the button; live update."""
+        from PyQt6.QtWidgets import QMenu, QWidgetAction, QSlider
+        menu = QMenu(self)
+        box = QWidget(); bl = QHBoxLayout(box); bl.setContentsMargins(8, 4, 8, 4)
+        sl = QSlider(Qt.Orientation.Horizontal); sl.setRange(0, 100); sl.setValue(self.alpha)
+        sl.setFixedWidth(160)
+        lbl = QLabel(f"{self.alpha}%"); lbl.setFixedWidth(40)
+        bl.addWidget(sl); bl.addWidget(lbl)
+
+        def _set(v):  #vers 1
+            lbl.setText(f"{v}%")
+            self.alpha = v
+            self._show_alpha()
+            self.alphaChanged.emit(self.color_key, v)
+        sl.valueChanged.connect(_set)
+        wa = QWidgetAction(menu); wa.setDefaultWidget(box); menu.addAction(wa)
+        menu.exec(self.alpha_btn.mapToGlobal(self.alpha_btn.rect().bottomLeft()))
 
     def dragEnterEvent(self, event): #vers 1
         """Accept colour drags from other swatches."""
@@ -1444,11 +1500,13 @@ class ThemeColorEditor(QWidget): #vers 5
             self.color_input.setStyleSheet("")
             self.lock_check.setToolTip("Unlocked - Click to lock")
 
-    def on_color_changed(self, text): #vers 1
+    def on_color_changed(self, text): #vers 2
         """Handle color input text change"""
         if text.startswith('#') and len(text) == 7:
             self.current_value = text
             self.update_preview(text)
+            if self.alpha is not None:
+                self._show_alpha()
             self.colorChanged.emit(self.color_key, text)
 
     def open_color_dialog(self): #vers 1
@@ -1680,8 +1738,62 @@ class DebugSettings:
         self.app_settings.save_settings()
         return self.debug_enabled
 
+# Panel effect, image and transparency keys kept in theme and settings JSON
+THEME_EFFECT_KEYS = ("color_alpha", "panel_fill_dir", "panel_grad_dir", "panel_pattern_style",
+                     "panel_pattern_scale", "panel_effect_type",
+                     "panel_bg_image", "panel_bg_image_mode", "panel_bg_image_opacity",
+                     "panel_bg_image_all", "titlebar_opacity", "panel_opacity",
+                     "button_opacity", "widget_opacity",
+                     "button_style", "progressbar_style", "progressbar_height")
+
+_IMAGE_DIRS = []      # folders searched for relative panel image paths
+
+# Background colours that take a transparency value (Colors tab, 0-100)
+ALPHA_COLOR_KEYS = ("bg_primary", "bg_secondary", "bg_tertiary", "panel_bg", "toolbar_bg",
+                    "button_normal", "titlebar_bg", "gadgetbar_bg", "menu_bg",
+                    "selection_background", "table_row_odd", "table_row_even", "panel_entries",
+                    "splitter_color_background", "scrollbar_background", "dialog_bg")
+
+
+def apply_color_alpha(colors, alpha): #vers 1
+    """Copy of colors with transparent keys as rgba(); alpha = {key: 0-100}."""
+    out = dict(colors)
+    for key, a in (alpha or {}).items():
+        val = out.get(key)
+        if key in ALPHA_COLOR_KEYS and a < 100 and isinstance(val, str) \
+                and val.startswith('#') and len(val) == 7:
+            r, g, b = (int(val[i:i + 2], 16) for i in (1, 3, 5))
+            out[key] = f"rgba({r}, {g}, {b}, {round(max(0, a) * 2.55)})"
+    return out
+
+
+def resolve_panel_image(path): #vers 1
+    """Absolute path of a panel image; relative paths look in settings/themes folders."""
+    if not path or os.path.isabs(path):
+        return path
+    for d in _IMAGE_DIRS:
+        cand = os.path.join(str(d), path)
+        if os.path.isfile(cand):
+            return cand
+    return path
+
+
+def store_panel_image(path, folder): #vers 1
+    """Copy a panel image into folder/images; return 'images/<name>' (or '' when none)."""
+    import shutil
+    src = resolve_panel_image(path)
+    if not src or not os.path.isfile(src):
+        return path or ''
+    dst_dir = Path(folder) / 'images'
+    dst_dir.mkdir(parents=True, exist_ok=True)
+    dst = dst_dir / os.path.basename(src)
+    if Path(src).resolve() != dst.resolve():
+        shutil.copy2(src, dst)
+    return f"images/{dst.name}"
+
+
 class AppSettings:
-    def __init__(self, settings_file="resbio.settings.json"): #vers 4
+    def __init__(self, settings_file="appfactory.settings.json"): #vers 5
         """Initialize application settings with Windows compatibility"""
         current_file_dir = Path(__file__).parent
 
@@ -1692,6 +1804,22 @@ class AppSettings:
         else:
             self.themes_dir = current_file_dir / "themes"
             self.settings_file = current_file_dir / settings_file
+
+        # Exe build: settings/ beside the exe; bundled file is the default.
+        # Self-contained here as this master file is synced to all tool repos.
+        import sys
+        if getattr(sys, 'frozen', False):
+            import shutil
+            portable_dir = Path(sys.executable).resolve().parent / 'settings'
+            portable_dir.mkdir(parents=True, exist_ok=True)
+            portable = portable_dir / settings_file
+            if not portable.exists() and self.settings_file.exists():
+                shutil.copyfile(self.settings_file, portable)
+                bundled_imgs = self.settings_file.parent / 'images'
+                if bundled_imgs.is_dir():
+                    shutil.copytree(bundled_imgs, portable_dir / 'images', dirs_exist_ok=True)
+            self.settings_file = portable
+        _IMAGE_DIRS[:] = [self.settings_file.parent, self.themes_dir]
 
         # FIXED: Windows-compatible default paths using Path objects
         if os.name == 'nt':  # Windows
@@ -1787,6 +1915,7 @@ class AppSettings:
             'panel_bg_image':            '',
             'panel_bg_image_mode':       0,
             'panel_bg_image_opacity':    100,
+            'panel_bg_image_all':        False,
             'button_style':              'flat',
             'progressbar_style':         'system',
             'progressbar_fill':          '#4a7a9b',
@@ -1824,10 +1953,26 @@ class AppSettings:
         self.weapons_folder = self.current_settings.get('weapons_folder', self.default_settings['weapons_folder'])
 
 
-    def _generate_stylesheet(self, colors): #vers 2
-        """Generate stylesheet from colors dict - shared by both classes"""
+    def _generate_stylesheet(self, colors): #vers 3
+        """Generate stylesheet from colors dict - shared by both classes.
+        Colour transparency (current_settings color_alpha) becomes rgba()."""
         if not colors:
             return ""
+        colors = dict(colors)
+        # Fallback colours resolved first so their own transparency applies
+        _bg2 = colors.get('bg_secondary', '#f5f5f5')
+        colors.setdefault('menu_bg', _bg2)
+        colors['scrollbar_background'] = colors.get('scrollbar_background') or _bg2
+        colors['dialog_bg'] = colors.get('dialog_bg') or colors.get('bg_primary', '#ffffff')
+        colors['toolbar_bg'] = colors.get('toolbar_bg') or _bg2
+        colors['gadgetbar_bg'] = colors.get('gadgetbar_bg') or colors['toolbar_bg']
+        _alpha = dict(getattr(self, 'current_settings', {}).get('color_alpha', {}))
+        if 'titlebar_bg' in _alpha:                       # title bar is drawn in gadgetbar_bg
+            _alpha['gadgetbar_bg'] = _alpha['titlebar_bg']
+        if 'splitter_color_background' in _alpha and colors.get('handle_color'):
+            colors['splitter_color_background'] = colors['handle_color']
+            colors.pop('handle_color')
+        colors = apply_color_alpha(colors, _alpha)
 
         # Extract all colors
         bg_primary = colors.get('bg_primary', '#ffffff')
@@ -2203,7 +2348,7 @@ class AppSettings:
         }}
 
         QMenu {{
-            background-color: {bg_secondary};
+            background-color: {colors.get('menu_bg', bg_secondary)};
             color: {text_primary};
             border: 1px solid {border};
         }}
@@ -2237,7 +2382,7 @@ class AppSettings:
         }}
 
         QScrollBar:vertical {{
-            background-color: {bg_secondary};
+            background-color: {colors['scrollbar_background']};
             width: 12px;
             border: none;
             margin: 0px;
@@ -2262,7 +2407,7 @@ class AppSettings:
         }}
 
         QScrollBar:horizontal {{
-            background-color: {bg_secondary};
+            background-color: {colors['scrollbar_background']};
             height: 12px;
             border: none;
             margin: 0px;
@@ -2421,7 +2566,7 @@ class AppSettings:
         return self.default_settings.copy()
 
 
-    def _load_all_themes(self): #vers 2
+    def _load_all_themes(self): #vers 3
         """Load all theme files from apps.themes.directory - Windows compatible"""
         themes = {}
         try:
@@ -2454,10 +2599,13 @@ class AppSettings:
 
         return themes
 
-    def save_settings(self):
-        """Save current settings to file"""
+    def save_settings(self): #vers 2
+        """Save current settings to file; panel image copied beside it (images/)."""
         try:
             self.settings_file.parent.mkdir(parents=True, exist_ok=True)  # ADD THIS LINE
+            if self.current_settings.get('panel_bg_image'):
+                self.current_settings['panel_bg_image'] = store_panel_image(
+                    self.current_settings['panel_bg_image'], self.settings_file.parent)
             with open(self.settings_file, 'w', encoding='utf-8') as f:  # ADD encoding='utf-8'
                 json.dump(self.current_settings, f, indent=2, ensure_ascii=False)  # ADD ensure_ascii=False
             print(f"Settings saved to: {self.settings_file}")
@@ -2511,7 +2659,7 @@ class AppSettings:
             "show_emoji_in_buttons": False,
             # Path remembering settings (from your existing file)
             "remember_img_output_path": True,
-            "last_img_output_path": "/home/x2",
+            "last_img_output_path": "",
             "remember_import_path": True,
             "last_import_path": "",
             "remember_export_path": True,
@@ -2563,7 +2711,7 @@ class AppSettings:
 
             # NEW: Path remembering settings (from your updated file)
             "remember_img_output_path": True,
-            "last_img_output_path": "/home/x2",
+            "last_img_output_path": "",
             "remember_import_path": True,
             "last_import_path": "",
             "remember_export_path": True,
@@ -2848,6 +2996,14 @@ class AppSettings:
         except Exception as e:
             print(f"Error saving theme {theme_name}: {e}")
             return False
+
+    def apply_theme_effects(self, theme_key): #vers 2
+        """Copy a theme's panel effect, image and transparency keys into current settings."""
+        theme = self.themes.get(theme_key, {})
+        for key in THEME_EFFECT_KEYS:
+            if key in theme:
+                self.current_settings[key] = theme[key]
+        self.current_settings["color_alpha"] = dict(theme.get("color_alpha", {}))
 
     def save_theme(self, theme_name, theme_data): #vers 2
         """Save theme data to JSON file in themes directory"""
@@ -3150,33 +3306,96 @@ class AppSettings:
 
 
 
-class AppPanelEffect: #vers 1
+class AppPanelEffect: #vers 2
     """Mixin installed on QWidget panels to draw fill/gradient/pattern
     effects from app_settings. Install with AppPanelEffect.install(widget, settings)."""
 
+    _filter = None
+
     @staticmethod
-    def install(widget, app_settings, effect_type="auto"): #vers 1
-        """Install panel effect paintEvent on widget.
-        effect_type: 'fill'|'gradient'|'pattern'|'auto' (reads panel_effect key)
-        """
+    def install(widget, app_settings, effect_type="auto"): #vers 2
+        """Hook panel effect painting onto widget via a shared event filter.
+        Works on widgets that already painted (instance paintEvent patches did not)."""
         widget._app_settings_ref = app_settings
         widget._panel_effect_type = effect_type
+        if getattr(widget, '_panel_effect_installed', False):
+            return
+        if AppPanelEffect._filter is None:
+            from PyQt6.QtCore import QObject, QEvent
+            from PyQt6.QtWidgets import QApplication
 
-        original_paint = widget.__class__.paintEvent if hasattr(widget.__class__, 'paintEvent') else None
+            class _PanelEffectFilter(QObject): #vers 1
+                """Paint the widget normally, then the panel effect on top."""
+                def eventFilter(self, obj, ev): #vers 2
+                    if ev.type() != QEvent.Type.Paint:
+                        return False
+                    if getattr(obj, '_panel_under_tint', None) is not None:
+                        AppPanelEffect._draw_under(obj)       # image + tint, content paints on top
+                        return False
+                    if getattr(obj, '_panel_effect_installed', False):
+                        type(obj).paintEvent(obj, ev)
+                        AppPanelEffect._draw_effect(obj, ev)
+                        return True
+                    return False
 
-        def _panel_paint(self_w, event):
-            if original_paint:
-                original_paint(self_w, event)
-            AppPanelEffect._draw_effect(self_w, event)
-
-        # Only patch if not already patched
-        if not getattr(widget, '_panel_effect_installed', False):
-            import types
-            widget.paintEvent = types.MethodType(_panel_paint, widget)
-            widget._panel_effect_installed = True
+            AppPanelEffect._filter = _PanelEffectFilter(QApplication.instance())
+        widget.installEventFilter(AppPanelEffect._filter)
+        widget._panel_effect_installed = True
 
     @staticmethod
-    def _draw_effect(widget, event): #vers 1
+    def install_under(widget, styled, app_settings): #vers 1
+        """Image behind a list/toolbar/tab page: widget made transparent, its own
+        colour laid over the image as a tint. styled = widget carrying the stylesheet."""
+        from PyQt6.QtGui import QColor
+        if getattr(widget, '_panel_under_tint', None) is None:
+            role = widget.backgroundRole()
+            widget._panel_under_tint = QColor(widget.palette().color(role))
+            widget._panel_under_styled = styled
+            styled._panel_under_ss = styled.styleSheet()
+            styled.setStyleSheet(styled._panel_under_ss
+                                 + f"\n{type(styled).__name__} {{ background: transparent; }}")
+            widget.setAutoFillBackground(False)
+            AppPanelEffect.install(widget, app_settings)
+            widget._panel_effect_installed = False      # under mode only
+        widget._app_settings_ref = app_settings
+        widget.update()
+
+    @staticmethod
+    def remove_under(widget): #vers 1
+        """Undo install_under: original stylesheet back, no image."""
+        styled = getattr(widget, '_panel_under_styled', None)
+        if styled is not None:
+            styled.setStyleSheet(getattr(styled, '_panel_under_ss', ''))
+        widget._panel_under_tint = None
+        widget.update()
+
+    @staticmethod
+    def _draw_under(widget): #vers 2
+        """Paint image then the widget's own colour as a tint at Transparency
+        opacity (Panels; Widgets for toolbars)."""
+        from PyQt6.QtGui import QPainter, QColor
+        from PyQt6.QtWidgets import QToolBar
+        cs = getattr(widget, '_app_settings_ref', None) or {}
+        if not isinstance(cs, dict):
+            cs = getattr(cs, 'current_settings', {})
+        if not widget.isVisible() or widget.width() <= 0 or widget.height() <= 0:
+            return
+        p = QPainter()
+        if not p.begin(widget):
+            return
+        try:
+            r = widget.rect()
+            tint = QColor(widget._panel_under_tint)
+            p.fillRect(r, tint)
+            if AppPanelEffect._paint_image(p, r, cs, widget):
+                key = 'widget_opacity' if isinstance(widget, QToolBar) else 'panel_opacity'
+                tint.setAlphaF(max(0, min(100, cs.get(key, 100))) / 100.0)
+                p.fillRect(r, tint)
+        finally:
+            p.end()
+
+    @staticmethod
+    def _draw_effect(widget, event): #vers 2
         """Draw the panel effect on top of the widget background."""
         from PyQt6.QtGui import QPainter, QColor, QLinearGradient, QPen
         from PyQt6.QtCore import QPointF, Qt
@@ -3188,7 +3407,19 @@ class AppPanelEffect: #vers 1
             cs = getattr(cs, 'current_settings', {})
 
         effect = cs.get('panel_effect_type', 'none')
-        if effect == 'none' or not effect:
+        image = cs.get('panel_bg_image', '')
+        if (effect == 'none' or not effect) and not image:
+            return
+
+        # Guard against painting a widget that isn't currently paintable -
+        # e.g. mid-scroll/resize reflow can transiently leave a widget with
+        # zero size or not visible. Qt prints "paintEngine == 0" warnings
+        # from its C++ layer the moment QPainter.begin() is attempted on
+        # such a widget, before our Python-level check on begin()'s return
+        # value even runs - checking these conditions first avoids the
+        # warning being printed at all, not just handling the failure
+        # after the fact.
+        if not widget.isVisible() or widget.width() <= 0 or widget.height() <= 0:
             return
 
         p = QPainter()
@@ -3204,6 +3435,8 @@ class AppPanelEffect: #vers 1
                 AppPanelEffect._paint_gradient(p, r, cs)
             elif effect == 'pattern':
                 AppPanelEffect._paint_pattern(p, r, cs)
+            if image:
+                AppPanelEffect._paint_image(p, r, cs, widget)
         except Exception:
             pass
         finally:
@@ -3211,30 +3444,34 @@ class AppPanelEffect: #vers 1
                 p.end()
 
     @staticmethod
-    def _paint_fill(p, r, cs): #vers 3
+    def _paint_fill(p, r, cs): #vers 4
         from PyQt6.QtGui import QColor, QLinearGradient
         from PyQt6.QtCore import QPointF
-        ca = QColor(cs.get('panel_fill_a', '#1a1a2e'))
-        cb = QColor(cs.get('panel_fill_b', '#16213e'))
+
+        has_explicit_a = 'panel_fill_a' in cs
+        has_explicit_b = 'panel_fill_b' in cs
 
         # panel_bg lives in theme JSON, not in current_settings -- fetch properly
         panel_bg = cs.get('panel_bg') or cs.get('bg_primary', '')
         if not panel_bg:
-            # Try to get from app_settings theme colors
             try:
                 from PyQt6.QtWidgets import QApplication
                 app = QApplication.instance()
                 if app:
                     win_col = app.palette().color(app.palette().ColorRole.Window)
-                    if win_col.lightness() > 128:
-                        panel_bg = win_col.name()
+                    panel_bg = win_col.name()
             except Exception:
                 pass
 
-        if panel_bg:
-            theme_col = QColor(panel_bg)
-            if theme_col.lightness() > 128 and ca.lightness() < 64:
-                ca = cb = theme_col
+        # Fallback priority: explicit user setting > theme's own panel/window
+        # colour (any lightness, not just light themes) > neutral grey. The
+        # old hardcoded '#1a1a2e'/'#16213e' defaults were a fixed navy-purple
+        # tint that showed through on any dark theme that hadn't explicitly
+        # set panel_fill_a/b, regardless of what that theme's actual colours
+        # were - this now matches whatever theme is active instead.
+        default_col = QColor(panel_bg) if panel_bg else QColor('#2a2a2e')
+        ca = QColor(cs.get('panel_fill_a')) if has_explicit_a else default_col
+        cb = QColor(cs.get('panel_fill_b')) if has_explicit_b else default_col
 
         d = cs.get('panel_fill_dir', 0)
         if d == 0:
@@ -3254,12 +3491,13 @@ class AppPanelEffect: #vers 1
         p.fillRect(r, g)
 
     @staticmethod
-    def _paint_gradient(p, r, cs): #vers 3
+    def _paint_gradient(p, r, cs): #vers 4
         from PyQt6.QtGui import QColor, QLinearGradient
         from PyQt6.QtCore import QPointF
-        s1 = QColor(cs.get('panel_grad_stop1', '#1a1a2e'))
-        s2 = QColor(cs.get('panel_grad_stop2', '#2d1b4e'))
-        s3 = QColor(cs.get('panel_grad_stop3', '#16213e'))
+
+        has_s1 = 'panel_grad_stop1' in cs
+        has_s2 = 'panel_grad_stop2' in cs
+        has_s3 = 'panel_grad_stop3' in cs
 
         # Fetch theme window color from QApplication palette as fallback
         panel_bg = cs.get('panel_bg') or cs.get('bg_primary', '')
@@ -3269,15 +3507,16 @@ class AppPanelEffect: #vers 1
                 app = QApplication.instance()
                 if app:
                     win_col = app.palette().color(app.palette().ColorRole.Window)
-                    if win_col.lightness() > 128:
-                        panel_bg = win_col.name()
+                    panel_bg = win_col.name()
             except Exception:
                 pass
 
-        if panel_bg:
-            theme_col = QColor(panel_bg)
-            if theme_col.lightness() > 128 and s1.lightness() < 64:
-                s1 = s2 = s3 = theme_col
+        # Same fallback priority fix as _paint_fill - theme colour at any
+        # lightness beats the old hardcoded purple-tinted defaults.
+        default_col = QColor(panel_bg) if panel_bg else QColor('#2a2a2e')
+        s1 = QColor(cs.get('panel_grad_stop1')) if has_s1 else default_col
+        s2 = QColor(cs.get('panel_grad_stop2')) if has_s2 else default_col
+        s3 = QColor(cs.get('panel_grad_stop3')) if has_s3 else default_col
 
         d  = cs.get('panel_grad_dir', 1)
         pts = {
@@ -3292,6 +3531,57 @@ class AppPanelEffect: #vers 1
         g = QLinearGradient(s, e)
         g.setColorAt(0, s1); g.setColorAt(0.5, s2); g.setColorAt(1, s3)
         p.fillRect(r, g)
+
+    _pixmap_cache = {}
+
+    @staticmethod
+    def _paint_image(p, r, cs, widget=None): #vers 3
+        """Panel background image (tiled/stretched/centred/fit/fill, or one image
+        across the whole window) at blend opacity; True if drawn."""
+        from PyQt6.QtGui import QPixmap
+        from PyQt6.QtCore import Qt, QPoint
+        path = resolve_panel_image(cs.get('panel_bg_image', ''))
+        if not path:
+            return False
+        px = AppPanelEffect._pixmap_cache.get(path)
+        if px is None:
+            px = QPixmap(path)
+            AppPanelEffect._pixmap_cache[path] = px
+        if px.isNull():
+            return False
+        mode = cs.get('panel_bg_image_mode', 0)
+        p.save()
+        p.setOpacity(cs.get('panel_bg_image_opacity', 100) / 100.0)
+        if mode == 5 and widget is not None:   # Across window: one image, panels show their part
+            win = widget.window()
+            key = (path, win.width(), win.height())
+            sc = AppPanelEffect._pixmap_cache.get(key)
+            if sc is None:
+                sc = px.scaled(win.size(), Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                               Qt.TransformationMode.SmoothTransformation)
+                AppPanelEffect._pixmap_cache = {k: v for k, v in AppPanelEffect._pixmap_cache.items()
+                                                if not isinstance(k, tuple)}
+                AppPanelEffect._pixmap_cache[key] = sc
+            off = widget.mapTo(win, QPoint(0, 0))
+            p.setClipRect(r)
+            p.drawPixmap(-off.x() + (win.width() - sc.width()) // 2,
+                         -off.y() + (win.height() - sc.height()) // 2, sc)
+        elif mode == 0:     # Tiled
+            p.drawTiledPixmap(r, px)
+        elif mode == 1:     # Stretched
+            p.drawPixmap(r, px)
+        elif mode == 2:     # Centred
+            p.drawPixmap(r.left() + (r.width() - px.width()) // 2,
+                         r.top() + (r.height() - px.height()) // 2, px)
+        else:               # 3 Scaled fit, 4 Scaled fill (5 in previews)
+            aspect = (Qt.AspectRatioMode.KeepAspectRatio if mode == 3
+                      else Qt.AspectRatioMode.KeepAspectRatioByExpanding)
+            sc = px.scaled(r.size(), aspect, Qt.TransformationMode.SmoothTransformation)
+            p.setClipRect(r)
+            p.drawPixmap(r.left() + (r.width() - sc.width()) // 2,
+                         r.top() + (r.height() - sc.height()) // 2, sc)
+        p.restore()
+        return True
 
     @staticmethod
     def _paint_pattern(p, r, cs): #vers 1
@@ -3332,15 +3622,20 @@ class AppPanelEffect: #vers 1
                 p.drawRect(r.left(), r.top()+row*scale, r.width(), scale)
 
 
-def apply_panel_effects(window, app_settings): #vers 3
+def apply_panel_effects(window, app_settings): #vers 5
     """Walk a window's panels and apply the current panel effect to each.
     Skips: AppSettings dialog itself.
     """
-    from PyQt6.QtWidgets import QGroupBox, QFrame
+    from PyQt6.QtWidgets import QGroupBox, QFrame, QAbstractScrollArea
     cs = app_settings.current_settings
     effect = cs.get('panel_effect_type', 'none')
 
-    if effect == 'none':
+    if effect == 'none' and not cs.get('panel_bg_image', ''):
+        from PyQt6.QtWidgets import QWidget
+        _apply_image_under(window, cs, False)
+        for w in window.findChildren(QWidget):          # repaint panels that had an effect
+            if getattr(w, '_panel_effect_installed', False):
+                w.update()
         return
 
     # Don't apply panel effects to the settings dialog itself
@@ -3376,12 +3671,47 @@ def apply_panel_effects(window, app_settings): #vers 3
         widget.update()
 
     for widget in window.findChildren(QFrame):
-        if widget.objectName() in ('titlebar', 'gadgetbar'):
+        if widget.objectName() in ('titlebar', 'gadgetbar',
+                                    'dp5_bitmaps_panel', 'dp5_brushcolors_panel',
+                                    'dp5_imagepalette_panel', 'dp5_userpalette_panel'):
+            continue
+        if isinstance(widget, QAbstractScrollArea):      # painted via viewport, not the frame
             continue
         if widget.frameStyle() & QFrame.Shape.StyledPanel.value:
             widget._app_settings_ref = cs
             AppPanelEffect.install(widget, cs)
             widget.update()
+
+    _apply_image_under(window, cs, bool(cs.get('panel_bg_image') and cs.get('panel_bg_image_all')))
+
+
+def _apply_image_under(window, cs, on): #vers 1
+    """Panel image behind lists, toolbars and tab pages (tinted), or removed when off."""
+    from PyQt6.QtWidgets import QAbstractScrollArea, QToolBar, QTabWidget, QStackedWidget
+    from PyQt6.QtOpenGLWidgets import QOpenGLWidget
+    targets = []
+    for view in window.findChildren(QAbstractScrollArea):
+        vp = view.viewport()
+        if vp is not None and not isinstance(vp, QOpenGLWidget):
+            targets.append((vp, view))
+    targets += [(tb, tb) for tb in window.findChildren(QToolBar)]
+    for tw in window.findChildren(QTabWidget):
+        st = tw.findChild(QStackedWidget)
+        if st is not None:
+            targets.append((st, st))
+    for target, styled in targets:
+        w, skip = styled.parent(), False
+        while w is not None:
+            if 'Settings' in type(w).__name__ or 'Dialog' in type(w).__name__:
+                skip = True
+                break
+            w = w.parent()
+        if skip:
+            continue
+        if on:
+            AppPanelEffect.install_under(target, styled, cs)
+        elif getattr(target, '_panel_under_tint', None) is not None:
+            AppPanelEffect.remove_under(target)
 
 
 class PanelPreviewWidget(QWidget): #vers 1
@@ -3620,45 +3950,12 @@ class PanelPreviewWidget(QWidget): #vers 1
         p.fillRect(r, g)
         self._label(p, r, "Copper Effect Preview")
 
-    def _draw_image(self, p, r, cs):
-        from PyQt6.QtGui import QColor, QPixmap
-        from PyQt6.QtCore import Qt
-        path = cs.get("panel_bg_image", "")
-        opacity = cs.get("panel_bg_image_opacity", 100) / 100.0
-        if path:
-            try:
-                px = QPixmap(path)
-                if not px.isNull():
-                    mode = cs.get("panel_bg_image_mode", 0)
-                    p.setOpacity(opacity)
-                    if mode == 0:   # Tiled
-                        p.drawTiledPixmap(r, px)
-                    elif mode == 1: # Stretched
-                        p.drawPixmap(r, px)
-                    elif mode == 2: # Centred
-                        x = r.left() + (r.width() - px.width()) // 2
-                        y = r.top() + (r.height() - px.height()) // 2
-                        p.drawPixmap(x, y, px)
-                    elif mode == 3: # Scaled fit
-                        scaled = px.scaled(r.size(),
-                            Qt.AspectRatioMode.KeepAspectRatio,
-                            Qt.TransformationMode.SmoothTransformation)
-                        x = r.left() + (r.width() - scaled.width()) // 2
-                        y = r.top() + (r.height() - scaled.height()) // 2
-                        p.drawPixmap(x, y, scaled)
-                    elif mode == 4: # Scaled fill
-                        scaled = px.scaled(r.size(),
-                            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                            Qt.TransformationMode.SmoothTransformation)
-                        p.drawPixmap(r.left(), r.top(), scaled)
-                    p.setOpacity(1.0)
-                    self._label(p, r, "Image Preview")
-                    return
-            except Exception:
-                pass
-        # No image — show placeholder
+    def _draw_image(self, p, r, cs): #vers 2
         from PyQt6.QtGui import QColor
-        p.fillRect(r, QColor("#2a2a2a"))
+        p.fillRect(r, QColor(cs.get("bg_primary", "#2a2a2a")))
+        if AppPanelEffect._paint_image(p, r, cs):
+            self._label(p, r, "Image Preview")
+            return
         p.setPen(QColor("#888888"))
         p.drawText(r, 0x84, "No image selected")  # AlignCenter|AlignVCenter
 
@@ -3705,7 +4002,7 @@ class PanelPreviewWidget(QWidget): #vers 1
         f = QFont("Arial", 14, QFont.Weight.Bold)
         p.setFont(f)
         from PyQt6.QtCore import Qt
-        AppBuildLabel = (f"{app_name} - Build {App_build}")
+        AppBuildLabel = (f"{App_name} - Build {App_build}")
         p.drawText(r.adjusted(16,0,0,0), Qt.AlignmentFlag.AlignVCenter, AppBuildLabel)
         p.setPen(QColor("#aaaacc"))
         f2 = QFont("Arial", 8)
@@ -4091,7 +4388,7 @@ class SettingsDialog(QDialog): #vers 15
             self.showMaximized()
 
 
-    def _is_on_draggable_area(self, pos): #vers 4
+    def _is_on_draggable_area(self, pos): #vers 5
         """Check if position is on the draggable titlebar area.
         Works for both CustomWindow (self.toolbar) and SettingsDialog
         (self.dialog_titlebar). Returns True if pos is inside the titlebar
@@ -4121,13 +4418,6 @@ class SettingsDialog(QDialog): #vers 15
                 return False
 
         return True
-        for btn in buttons_to_check:
-            btn_global_rect = btn.geometry()
-            btn_rect = btn_global_rect.translated(toolbar_rect.topLeft())
-            if btn_rect.contains(pos):
-                return False  # On a button, not draggable
-
-        return True  # On empty stretch area, draggable
 
 
     def _create_ui(self): #vers 8
@@ -4199,6 +4489,15 @@ class SettingsDialog(QDialog): #vers 15
 
         self.debug_tab = self._create_debug_tab()
         self.tabs.addTab(self.debug_tab, "Debug")
+
+        # Extra tabs contributed by any docked tool currently open as
+        # a main-window tab (Map Workshop, and any future tool doing the same)
+        self._extra_apply_callbacks = []
+        try:
+            for label, widget in self._collect_settings_contributions():
+                self.tabs.addTab(widget, label)
+        except Exception as e:
+            print(f"[Settings] Could not collect docked-tool settings tabs: {e}")
 
         content_layout.addWidget(self.tabs)
 
@@ -5056,6 +5355,7 @@ class SettingsDialog(QDialog): #vers 15
             "button_pressed": "Button - Pressed",
             "selection_background": "Selection - Background",
             "selection_text": "Selection - Text",
+            "menu_bg": "Menu - Background",
             "menu_highlight_bg": "Menu - Highlight Background",
             "menu_highlight_text": "Menu - Highlight Text",
             "table_row_even": "Table Row - Even",
@@ -5145,29 +5445,20 @@ class SettingsDialog(QDialog): #vers 15
 
         # Theme Selector
         theme_selector_layout = QHBoxLayout()
-        theme_selector_layout.addWidget(QLabel(""))
+        theme_selector_layout.setSpacing(4)
 
-        self.instant_apply_check = QCheckBox("Apply Theme")
+        # Tick box on its own, label beside it (clicking the label toggles it)
+        self.instant_apply_check = QCheckBox()
         self.instant_apply_check.setChecked(True)
-        self.instant_apply_check.setStyleSheet("""
-            QCheckBox {
-                font-weight: bold;
-                font-size: 11px;
-                padding: 3px 8px;
-                border: 2px solid palette(highlight);
-                border-radius: 4px;
-                color: palette(highlighted-text);
-                background: palette(highlight);
-                spacing: 4px;
-            }
-            QCheckBox:unchecked {
-                background: palette(button);
-                color: palette(button-text);
-                border: 2px solid palette(mid);
-            }
-            QCheckBox::indicator { width: 0; height: 0; }
-        """)
+        self.instant_apply_check.setToolTip("Apply theme changes live")
+        apply_lbl = QLabel("Apply Theme")
+        apply_lbl.setStyleSheet("font-weight: bold; padding: 2px 6px;")
+        apply_lbl.setToolTip("Apply theme changes live")
+        apply_lbl.mousePressEvent = lambda e: self.instant_apply_check.toggle()
+        apply_lbl.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.instant_apply_check.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         theme_selector_layout.addWidget(self.instant_apply_check)
+        theme_selector_layout.addWidget(apply_lbl)
 
         self.theme_selector_combo = QComboBox()
         for theme_key, theme_data in self.app_settings.themes.items():
@@ -5182,7 +5473,7 @@ class SettingsDialog(QDialog): #vers 15
                     break
 
         self.theme_selector_combo.currentTextChanged.connect(self._on_theme_changed)
-        theme_selector_layout.addWidget(self.theme_selector_combo)
+        theme_selector_layout.addWidget(self.theme_selector_combo, 1)
 
 
         right_layout.addLayout(theme_selector_layout)
@@ -5253,8 +5544,13 @@ class SettingsDialog(QDialog): #vers 15
 
             # Normal colour editor row
             current_value = current_colors.get(color_key, "#ffffff")
-            editor = ThemeColorEditor(color_key, color_name, current_value, self)
+            if color_key == "menu_bg" and color_key not in current_colors:
+                current_value = current_colors.get("bg_secondary", current_value)
+            alpha = (self.app_settings.current_settings.get("color_alpha", {}).get(color_key, 100)
+                     if color_key in ALPHA_COLOR_KEYS else None)
+            editor = ThemeColorEditor(color_key, color_name, current_value, self, alpha)
             editor.colorChanged.connect(self._on_theme_color_changed)
+            editor.alphaChanged.connect(self._on_color_alpha_changed)
             editor.lockChanged.connect(lambda key, locked: None)
             self.color_editors[color_key] = editor
             scroll_layout.addWidget(editor)
@@ -5475,19 +5771,12 @@ class SettingsDialog(QDialog): #vers 15
             self.color_editors[selected_data].set_color(color)
 
 
-    def _create_gadgets_tab(self): #vers 4
+    def _create_gadgets_tab(self): #vers 6
         """Create gadgets styling tab with LIVE PREVIEW and proper splitter"""
         tab = QWidget()
         main_layout = QVBoxLayout(tab)
 
-        # Instructions at top
-        info_label = QLabel(
-            "<b>Widget Styling - Live Preview:</b><br>"
-            "Customize widget appearance and see changes instantly in the preview panel."
-        )
-        info_label.setWordWrap(True)
-        info_label.setStyleSheet("padding: 8px; border-radius: 4px;")
-        main_layout.addWidget(info_label)
+        main_layout.setContentsMargins(4, 4, 4, 4)
 
         # Create splitter for left (controls) and right (preview)
         self.gadgets_splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -5505,7 +5794,7 @@ class SettingsDialog(QDialog): #vers 15
 
         scroll_widget = QWidget()
         scroll_layout = QVBoxLayout(scroll_widget)
-        scroll_layout.setSpacing(15)
+        scroll_layout.setSpacing(4)
 
         # ========== BUTTON STYLING ==========
         button_group = QGroupBox("Button Styling")
@@ -5541,7 +5830,7 @@ class SettingsDialog(QDialog): #vers 15
             lambda v: self.button_radius_label.setText(f"{v}px")
         )
 
-        # Button Height
+        # Button Height, H and V padding on one row
         height_layout = QHBoxLayout()
         height_layout.addWidget(QLabel("Min Height:"))
         self.button_height_spin = QSpinBox()
@@ -5550,24 +5839,21 @@ class SettingsDialog(QDialog): #vers 15
         self.button_height_spin.setSuffix("px")
         self.button_height_spin.valueChanged.connect(self._update_gadget_preview)
         height_layout.addWidget(self.button_height_spin)
-        height_layout.addStretch()
         button_layout.addLayout(height_layout)
 
         # Horizontal Padding
-        h_padding_layout = QHBoxLayout()
-        h_padding_layout.addWidget(QLabel("Horizontal Padding:"))
+        h_padding_layout = height_layout
+        h_padding_layout.addWidget(QLabel("H Pad:"))
         self.button_h_padding_spin = QSpinBox()
         self.button_h_padding_spin.setRange(2, 30)
         self.button_h_padding_spin.setValue(12)
         self.button_h_padding_spin.setSuffix("px")
         self.button_h_padding_spin.valueChanged.connect(self._update_gadget_preview)
         h_padding_layout.addWidget(self.button_h_padding_spin)
-        h_padding_layout.addStretch()
-        button_layout.addLayout(h_padding_layout)
 
         # Vertical Padding
-        v_padding_layout = QHBoxLayout()
-        v_padding_layout.addWidget(QLabel("Vertical Padding:"))
+        v_padding_layout = height_layout
+        v_padding_layout.addWidget(QLabel("V Pad:"))
         self.button_v_padding_spin = QSpinBox()
         self.button_v_padding_spin.setRange(2, 20)
         self.button_v_padding_spin.setValue(6)
@@ -5575,7 +5861,6 @@ class SettingsDialog(QDialog): #vers 15
         self.button_v_padding_spin.valueChanged.connect(self._update_gadget_preview)
         v_padding_layout.addWidget(self.button_v_padding_spin)
         v_padding_layout.addStretch()
-        button_layout.addLayout(v_padding_layout)
 
         scroll_layout.addWidget(button_group)
 
@@ -5593,11 +5878,10 @@ class SettingsDialog(QDialog): #vers 15
         self.slider_height_spin.setSuffix("px")
         self.slider_height_spin.valueChanged.connect(self._update_gadget_preview)
         slider_height_layout.addWidget(self.slider_height_spin)
-        slider_height_layout.addStretch()
         slider_layout.addLayout(slider_height_layout)
 
         # Handle Size
-        handle_size_layout = QHBoxLayout()
+        handle_size_layout = slider_height_layout
         handle_size_layout.addWidget(QLabel("Handle Size:"))
         self.slider_handle_size = QSpinBox()
         self.slider_handle_size.setRange(12, 30)
@@ -5606,7 +5890,6 @@ class SettingsDialog(QDialog): #vers 15
         self.slider_handle_size.valueChanged.connect(self._update_gadget_preview)
         handle_size_layout.addWidget(self.slider_handle_size)
         handle_size_layout.addStretch()
-        slider_layout.addLayout(handle_size_layout)
 
         # Handle Radius
         slider_radius_layout = QHBoxLayout()
@@ -5753,7 +6036,6 @@ class SettingsDialog(QDialog): #vers 15
         self.splitter_show_grip.setChecked(True)
         self.splitter_show_grip.stateChanged.connect(self._update_gadget_preview)
         grip_layout.addWidget(self.splitter_show_grip)
-        grip_layout.addStretch()
         splitter_layout.addLayout(grip_layout)
 
         # Handle Style — 4 types
@@ -5761,23 +6043,22 @@ class SettingsDialog(QDialog): #vers 15
         hs_layout.addWidget(QLabel("Handle Style:"))
         self.handle_style_combo = QComboBox()
         self.handle_style_combo.addItems(["line", "gradient", "dots", "invisible"])
-        cs_now = getattr(self, 'current_settings', {})
+        cs_now = self.app_settings.current_settings
         self.handle_style_combo.setCurrentText(cs_now.get('handle_style', 'line'))
         self.handle_style_combo.currentTextChanged.connect(self._update_gadget_preview)
         self.handle_style_combo.currentTextChanged.connect(
-            lambda v: self.current_settings.update({'handle_style': v}))
+            lambda v: self.app_settings.current_settings.update({'handle_style': v}))
         hs_layout.addWidget(self.handle_style_combo, 1)
         splitter_layout.addLayout(hs_layout)
 
-        # Hide handles when docked
-        hd_layout = QHBoxLayout()
+        # Hide handles when docked (same row as grip)
+        hd_layout = grip_layout
         self.handle_hide_docked = QCheckBox("Hide handles when docked")
         self.handle_hide_docked.setChecked(cs_now.get('handle_hide_docked', False))
         self.handle_hide_docked.stateChanged.connect(
-            lambda v: self.current_settings.update({'handle_hide_docked': bool(v)}))
+            lambda v: self.app_settings.current_settings.update({'handle_hide_docked': bool(v)}))
         hd_layout.addWidget(self.handle_hide_docked)
         hd_layout.addStretch()
-        splitter_layout.addLayout(hd_layout)
 
         scroll_layout.addWidget(splitter_group)
 
@@ -5817,6 +6098,9 @@ class SettingsDialog(QDialog): #vers 15
         scroll_layout.addWidget(advanced_group)
 
         scroll_layout.addStretch()
+        for grp in scroll_widget.findChildren(QGroupBox):        # condensed rows
+            grp.layout().setSpacing(3)
+            grp.layout().setContentsMargins(6, 4, 6, 4)
         scroll.setWidget(scroll_widget)
         layout.addWidget(scroll)
 
@@ -5830,54 +6114,44 @@ class SettingsDialog(QDialog): #vers 15
         # ========== RIGHT SIDE - LIVE PREVIEW PANEL ==========
         preview_panel = QWidget()
         preview_layout = QVBoxLayout(preview_panel)
-        preview_layout.setContentsMargins(10, 10, 10, 10)
+        preview_layout.setContentsMargins(4, 0, 4, 4)
+        preview_layout.addWidget(QLabel("<b>Live Preview</b>"))
 
-        preview_title = QLabel("<b>Live Preview</b>")
-        preview_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        preview_title.setStyleSheet("font-size: 12pt; padding: 5px;")
-        preview_layout.addWidget(preview_title)
-
-        # Preview frame
+        # Preview frame (scrolls, so samples never overlap)
         self.preview_frame = QFrame()
         self.preview_frame.setFrameStyle(QFrame.Shape.Box | QFrame.Shadow.Sunken)
-        self.preview_frame.setMinimumSize(300, 400)
         preview_frame_layout = QVBoxLayout(self.preview_frame)
+        preview_frame_layout.setSpacing(4)
 
-        # Sample buttons
-        preview_frame_layout.addWidget(QLabel("Button Samples:"))
-        self.preview_btn_normal = QPushButton("Normal Button")
-        preview_frame_layout.addWidget(self.preview_btn_normal)
-
-        self.preview_btn_primary = QPushButton("Primary Action")
-        preview_frame_layout.addWidget(self.preview_btn_primary)
-
+        # Sample buttons in one row
+        preview_frame_layout.addWidget(QLabel("Buttons:"))
+        btn_row = QHBoxLayout()
+        self.preview_btn_normal = QPushButton("Normal")
+        self.preview_btn_primary = QPushButton("Primary")
         self.preview_btn_danger = QPushButton("Remove")
-        preview_frame_layout.addWidget(self.preview_btn_danger)
-
-        preview_frame_layout.addSpacing(20)
+        for b in (self.preview_btn_normal, self.preview_btn_primary, self.preview_btn_danger):
+            btn_row.addWidget(b)
+        preview_frame_layout.addLayout(btn_row)
 
         # Sample sliders
-        preview_frame_layout.addWidget(QLabel("Slider Samples:"))
+        preview_frame_layout.addWidget(QLabel("Slider:"))
         self.preview_slider_h = QSlider(Qt.Orientation.Horizontal)
         self.preview_slider_h.setRange(0, 100)
         self.preview_slider_h.setValue(50)
         preview_frame_layout.addWidget(self.preview_slider_h)
 
-        preview_frame_layout.addSpacing(20)
-
-        # Sample checkboxes
-        preview_frame_layout.addWidget(QLabel("Checkbox Samples:"))
-        self.preview_checkbox1 = QCheckBox("Enable feature A")
+        # Sample checkboxes in one row
+        cb_row = QHBoxLayout()
+        self.preview_checkbox1 = QCheckBox("Feature A")
         self.preview_checkbox1.setChecked(True)
-        preview_frame_layout.addWidget(self.preview_checkbox1)
-
-        self.preview_checkbox2 = QCheckBox("Enable feature B")
-        preview_frame_layout.addWidget(self.preview_checkbox2)
-
-        preview_frame_layout.addSpacing(20)
+        self.preview_checkbox2 = QCheckBox("Feature B")
+        cb_row.addWidget(self.preview_checkbox1)
+        cb_row.addWidget(self.preview_checkbox2)
+        cb_row.addStretch()
+        preview_frame_layout.addLayout(cb_row)
 
         # Sample text area with scrollbar
-        preview_frame_layout.addWidget(QLabel("Scrollbar Sample:"))
+        preview_frame_layout.addWidget(QLabel("Scrollbar:"))
         self.preview_text = QTextEdit()
         self.preview_text.setPlainText(
             "IMG Factory File Browser\n"
@@ -5903,34 +6177,36 @@ class SettingsDialog(QDialog): #vers 15
             "Total size: 1.2 GB\n"
             "RW Version: 3.6.0.0\n"
         )
-        self.preview_text.setMaximumHeight(150)
+        self.preview_text.setFixedHeight(90)
         preview_frame_layout.addWidget(self.preview_text)
 
-        preview_frame_layout.addSpacing(20)
-
         # Sample splitter
-        preview_frame_layout.addWidget(QLabel("Splitter Sample:"))
+        preview_frame_layout.addWidget(QLabel("Splitter:"))
         self.preview_splitter = QSplitter(Qt.Orientation.Horizontal)
         left_sample = QLabel("Left Panel")
         left_sample.setFrameStyle(QFrame.Shape.Box)
         left_sample.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        left_sample.setMinimumHeight(80)
+        left_sample.setMinimumHeight(50)
         right_sample = QLabel("Right Panel")
         right_sample.setFrameStyle(QFrame.Shape.Box)
         right_sample.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        right_sample.setMinimumHeight(80)
+        right_sample.setMinimumHeight(50)
         self.preview_splitter.addWidget(left_sample)
         self.preview_splitter.addWidget(right_sample)
         preview_frame_layout.addWidget(self.preview_splitter)
 
         preview_frame_layout.addStretch()
 
-        preview_layout.addWidget(self.preview_frame)
+        pv_scroll = QScrollArea()
+        pv_scroll.setWidgetResizable(True)
+        pv_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        pv_scroll.setWidget(self.preview_frame)
+        preview_layout.addWidget(pv_scroll)
 
         self.gadgets_splitter.addWidget(preview_panel)
 
         # Set initial splitter sizes (40% controls, 60% preview)
-        self.gadgets_splitter.setSizes([400, 600])
+        self.gadgets_splitter.setSizes([540, 460])
 
         main_layout.addWidget(self.gadgets_splitter)
 
@@ -6178,8 +6454,8 @@ class SettingsDialog(QDialog): #vers 15
         }
 
 
-    def _browse_background_image(self, target): #vers 1
-        """Browse for background image"""
+    def _browse_background_image(self, target): #vers 2
+        """Browse for background image (panel, primary, button)"""
         file_path, _ = QFileDialog.getOpenFileName(
             self,
             f"Select {target.capitalize()} Background Image",
@@ -6188,20 +6464,12 @@ class SettingsDialog(QDialog): #vers 15
         )
 
         if file_path:
-            if target == "panel":
-                self.panel_bg_path.setText(file_path)
-            elif target == "button":
-                self.button_bg_path.setText(file_path)
-            self._on_gadget_changed()
+            getattr(self, f"{target}_bg_path").setText(file_path)
 
 
-    def _clear_background_image(self, target): #vers 1
+    def _clear_background_image(self, target): #vers 2
         """Clear background image"""
-        if target == "panel":
-            self.panel_bg_path.clear()
-        elif target == "button":
-            self.button_bg_path.clear()
-        self._on_gadget_changed()
+        getattr(self, f"{target}_bg_path").clear()
 
 
     def _preview_gadget_styles(self): #vers 1
@@ -6227,7 +6495,7 @@ class SettingsDialog(QDialog): #vers 15
         pass
 
 
-    def _create_buttons_tab_v2(self): #vers 2
+    def _create_buttons_tab_v2(self): #vers 3
         """Buttons tab — style selector with live preview + per-panel tint colours."""
         from PyQt6.QtWidgets import (QScrollArea, QGridLayout, QFrame, QSizePolicy)
         from PyQt6.QtGui import QColor, QPainter, QLinearGradient, QPen
@@ -6238,7 +6506,7 @@ class SettingsDialog(QDialog): #vers 15
         root.setSpacing(6)
 
         #    Size controls                                                  
-        size_group = QGroupBox("Button & Titlebar Sizes")
+        size_group = QGroupBox("Button and Titlebar Sizes")
         size_group.setAutoFillBackground(True)
         szl = QGridLayout(size_group)
         szl.setColumnStretch(1, 1)
@@ -6254,28 +6522,27 @@ class SettingsDialog(QDialog): #vers 15
             sp.valueChanged.connect(_on)
             return sp
 
-        szl.addWidget(QLabel("Titlebar height:"),    0, 0)
+        szl.setColumnStretch(1, 0)
         self._tb_height_spin = _spinbox("titlebar_button_height", 24, 56)
-        szl.addWidget(self._tb_height_spin,          0, 1)
-
-        szl.addWidget(QLabel("Titlebar button size:"), 1, 0)
         self._tb_btn_size_spin = _spinbox("titlebar_button_size", 18, 48)
-        szl.addWidget(self._tb_btn_size_spin,         1, 1)
-
-        szl.addWidget(QLabel("Titlebar icon size:"),  2, 0)
         self._tb_icon_spin = _spinbox("titlebar_icon_size", 12, 36)
-        szl.addWidget(self._tb_icon_spin,             2, 1)
-
-        szl.addWidget(QLabel("Panel button height:"), 3, 0)
         self._btn_height_spin = _spinbox("button_size", 18, 48)
-        szl.addWidget(self._btn_height_spin,          3, 1)
+        for i, (lbl, sp) in enumerate([("Titlebar height:", self._tb_height_spin),
+                                       ("Titlebar button size:", self._tb_btn_size_spin),
+                                       ("Titlebar icon size:", self._tb_icon_spin),
+                                       ("Panel button height:", self._btn_height_spin)]):
+            sp.setMinimumWidth(80)
+            szl.addWidget(QLabel(lbl), i // 2, (i % 2) * 3)
+            szl.addWidget(sp, i // 2, (i % 2) * 3 + 1)
+        szl.setColumnStretch(2, 1)
+        szl.setColumnStretch(5, 1)
 
         root.addWidget(size_group)
 
-        #   Style selector
+        #   Style selector + workflow tint switch on one row
         style_group = QGroupBox("Button Style")
         style_group.setAutoFillBackground(True)
-        sg_lay = QVBoxLayout(style_group)
+        sg_lay = QHBoxLayout(style_group)
 
         STYLES = [
             ("flat",        "Flat",          "No effect — theme colour only"),
@@ -6299,17 +6566,17 @@ class SettingsDialog(QDialog): #vers 15
             self.button_theme_type_combo.addItems(["Light Theme Buttons", "Dark Theme Buttons"])
             self.button_theme_type_combo.setVisible(False)
 
-        self._btn_style_radios = {}
-        grid = QGridLayout()
-        grid.setSpacing(4)
+        self._btn_style_combo = QComboBox()
         for i, (key, label, tip) in enumerate(STYLES):
-            rb = QRadioButton(label)
-            rb.setToolTip(tip)
-            rb.setChecked(key == current_style)
-            rb.toggled.connect(lambda checked, k=key: self._on_btn_style_changed(k) if checked else None)
-            self._btn_style_radios[key] = rb
-            grid.addWidget(rb, i // 3, i % 3)
-        sg_lay.addLayout(grid)
+            self._btn_style_combo.addItem(label, key)
+            self._btn_style_combo.setItemData(i, tip, Qt.ItemDataRole.ToolTipRole)
+        idx = self._btn_style_combo.findData(current_style)
+        self._btn_style_combo.setCurrentIndex(max(0, idx))
+        self._btn_style_combo.currentIndexChanged.connect(
+            lambda i: self._on_btn_style_changed(self._btn_style_combo.itemData(i)))
+        sg_lay.addWidget(QLabel("Style:"))
+        sg_lay.addWidget(self._btn_style_combo, 1)
+        sg_lay.addSpacing(20)
         root.addWidget(style_group)
 
         #   Live preview
@@ -6336,17 +6603,14 @@ class SettingsDialog(QDialog): #vers 15
         root.addWidget(preview_group)
         self._update_btn_style_preview()
 
-        #   Tint on/off
-        tint_group = QGroupBox("Workflow Colour Tints")
-        tint_group.setAutoFillBackground(True)
-        tg_lay = QVBoxLayout(tint_group)
-        self._tint_enabled_cb = QCheckBox("Enable workflow colour tints on buttons")
+        #   Tint on/off (in the style row)
+        tg_lay = sg_lay
+        self._tint_enabled_cb = QCheckBox("Workflow colour tints on buttons")
         self._tint_enabled_cb.setChecked(
             self.app_settings.current_settings.get("use_pastel_buttons", True))
         self._tint_enabled_cb.setToolTip(
             "Colours aid workflow — e.g. pink=save, blue=open. Can be disabled here.")
         tg_lay.addWidget(self._tint_enabled_cb)
-        root.addWidget(tint_group)
 
         #   Per-panel tint colours
         scroll = QScrollArea()
@@ -6628,15 +6892,19 @@ class SettingsDialog(QDialog): #vers 15
 
         return tab
 
-    def _create_button_panel_editor(self, panel_id, buttons): #vers 1
-        """Create editor for a specific button panel"""
+    def _create_button_panel_editor(self, panel_id, buttons): #vers 2
+        """Tint editor for a button panel: rows of name, swatch, hex, Pick in two columns."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
 
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_widget = QWidget()
-        scroll_layout = QVBoxLayout(scroll_widget)
+        from PyQt6.QtWidgets import QGridLayout
+        scroll_layout = QGridLayout(scroll_widget)
+        scroll_layout.setHorizontalSpacing(6)
+        scroll_layout.setVerticalSpacing(2)
+        row_n = 0
 
         # Store button color editors
         if not hasattr(self, 'button_color_editors'):
@@ -6659,13 +6927,17 @@ class SettingsDialog(QDialog): #vers 15
             color_key = f"button_{panel_id}_{button_action}_{'light' if is_light else 'dark'}"
             default_color = self.app_settings.current_settings.get(color_key, default_colors.get(button_action, "#E3F2FD"))
 
-            # Create color editor
-            editor_group = QGroupBox(button_text)
+            # Row: name, swatch, hex, Pick (two rows per grid line)
+            editor_group = QWidget()
             editor_layout = QHBoxLayout(editor_group)
+            editor_layout.setContentsMargins(2, 0, 2, 0)
+            name_lbl = QLabel(button_text)
+            name_lbl.setFixedWidth(110)
+            editor_layout.addWidget(name_lbl)
 
             # Color preview
             color_preview = QLabel()
-            color_preview.setFixedSize(40, 30)
+            color_preview.setFixedSize(28, 22)
             color_preview.setStyleSheet(f"background-color: {default_color}; border: 1px solid #999;")
             editor_layout.addWidget(color_preview)
 
@@ -6678,7 +6950,8 @@ class SettingsDialog(QDialog): #vers 15
             editor_layout.addWidget(color_input)
 
             # Pick button
-            pick_btn = QPushButton("Pick Color")
+            pick_btn = QPushButton("Pick")
+            pick_btn.setFixedWidth(54)
             pick_btn.clicked.connect(
                 lambda checked, inp=color_input: self._pick_button_color(inp)
             )
@@ -6686,7 +6959,8 @@ class SettingsDialog(QDialog): #vers 15
 
             editor_layout.addStretch()
 
-            scroll_layout.addWidget(editor_group)
+            scroll_layout.addWidget(editor_group, row_n // 2, row_n % 2)
+            row_n += 1
 
             # Store for later access
             self.button_color_editors[panel_id][button_action] = {
@@ -7284,7 +7558,7 @@ Ready for operations..."""
         self._apply_demo_theme(original)
 
 
-    def _create_fonts_tab(self): #vers 2
+    def _create_fonts_tab(self): #vers 3
         """Create fonts settings tab with multiple font type controls"""
         tab = QWidget()
         layout = QVBoxLayout(tab)
@@ -7299,8 +7573,10 @@ Ready for operations..."""
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll_widget = QWidget()
+        scroll_widget = QGroupBox("Fonts  (font, size, weight)")
+        scroll_widget.setAutoFillBackground(True)
         scroll_layout = QVBoxLayout(scroll_widget)
+        scroll_layout.setSpacing(2)
 
         # Font type configurations
         self.font_controls = {}
@@ -7347,22 +7623,18 @@ Ready for operations..."""
 
     def _create_font_control_group(self, font_id, title, description,
                                 default_family, default_size,
-                                min_size, max_size): #vers 2
-        """Create a font control group for specific font type"""
-        group = QGroupBox(title)
-        group.setAutoFillBackground(True)
-        layout = QVBoxLayout(group)
-
-        # Description
-        desc_label = QLabel(description)
-        desc_label.setStyleSheet("color: palette(mid); font-style: italic; font-size: 8pt;")
-        layout.addWidget(desc_label)
-
-        # Font controls row
-        controls_layout = QHBoxLayout()
+                                min_size, max_size): #vers 3
+        """One row: Title - [font] [size] [weight]; description as tooltip."""
+        group = QWidget()
+        group.setToolTip(description)
+        controls_layout = QHBoxLayout(group)
+        controls_layout.setContentsMargins(4, 1, 4, 1)
+        name_lbl = QLabel(f"{title} -")
+        name_lbl.setFixedWidth(150)
+        name_lbl.setToolTip(description)
+        controls_layout.addWidget(name_lbl)
 
         # Font family
-        controls_layout.addWidget(QLabel("Font:"))
         font_combo = QFontComboBox()
 
         # Load current font setting from appfactory.settings.json
@@ -7376,7 +7648,6 @@ Ready for operations..."""
         controls_layout.addWidget(font_combo, 1)
 
         # Font size
-        controls_layout.addWidget(QLabel("Size:"))
         size_spin = QSpinBox()
         size_spin.setRange(min_size, max_size)
         current_size = self.app_settings.current_settings.get(
@@ -7391,7 +7662,6 @@ Ready for operations..."""
         controls_layout.addWidget(size_spin)
 
         # Font weight
-        controls_layout.addWidget(QLabel("Weight:"))
         weight_combo = QComboBox()
         weight_combo.addItems(["Normal", "Bold", "Light"])
         current_weight = self.app_settings.current_settings.get(
@@ -7403,8 +7673,6 @@ Ready for operations..."""
         )
         weight_combo.setFixedWidth(100)
         controls_layout.addWidget(weight_combo)
-
-        layout.addLayout(controls_layout)
 
         # Store controls for later access
         self.font_controls[font_id] = {
@@ -7665,157 +7933,140 @@ Ready for operations..."""
 
         return widget
 
-    def _create_panels_tab(self): #vers 3
-        """Panels tab — Image, Transparency, Gadgets only.
-        Fill / Gradient / Pattern colours moved to Colors tab.
-        """
-        from PyQt6.QtWidgets import QScrollArea
+    def _create_panels_tab(self): #vers 4
+        """Panels tab: four live previews stacked on the left; background image,
+        transparency and gadgets settings on the right.
+        Fill / Gradient / Pattern colours are in the Colors tab."""
+        from PyQt6.QtWidgets import QScrollArea, QGridLayout
 
         tab = QWidget()
-        root = QVBoxLayout(tab)
+        root = QHBoxLayout(tab)
         root.setContentsMargins(4, 4, 4, 4)
+        cs = self.app_settings.current_settings
 
-        note = QLabel("Colour effects (Fill, Gradient, Pattern, Copper, Hero) "
-                      "are configured in the Colors tab.")
-        note.setWordWrap(True)
-        note.setStyleSheet("color: palette(mid); font-size: 8pt; padding: 4px;")
-        root.addWidget(note)
+        #    Left: previews
+        prev_col = QWidget()
+        prev_col.setFixedWidth(270)
+        pl = QVBoxLayout(prev_col); pl.setContentsMargins(0, 0, 0, 0); pl.setSpacing(2)
+        eff = {"fill": "fill", "gradient": "gradient", "pattern": "pattern"}.get(
+            cs.get("panel_effect_type", "none"), "fill")
+        self._img_preview = PanelPreviewWidget(self, "image")
+        self._effect_preview = PanelPreviewWidget(self, eff)
+        self._trans_preview = PanelPreviewWidget(self, "transparency")
+        self._hero_side_preview = PanelPreviewWidget(self, "hero")
+        for title, pv in (("Image", self._img_preview), ("Colour effect", self._effect_preview),
+                          ("Transparency", self._trans_preview), ("Hero banner", self._hero_side_preview)):
+            t = QLabel(title); t.setStyleSheet("font-size: 8pt;")
+            pv.setMinimumHeight(70)
+            pl.addWidget(t)
+            pl.addWidget(pv, 1)
+        root.addWidget(prev_col)
 
-        sub = QTabWidget()
-
-        #    Image                                                          
-        img_ctrl = QWidget()
-        il = QVBoxLayout(img_ctrl)
-        il.setSpacing(8)
+        #    Right: settings
+        side = QTabWidget()
+        bg_ctrl = QWidget()
+        il = QVBoxLayout(bg_ctrl)
+        il.setSpacing(6)
 
         img_group = QGroupBox("Panel Background Image")
         img_group.setAutoFillBackground(True)
-        igl = QVBoxLayout(img_group)
+        igl = QGridLayout(img_group)
+        igl.setColumnStretch(1, 1)
 
-        path_lay = QHBoxLayout()
-        path_lay.addWidget(QLabel("Image:"))
         self._panel_img_path = QLineEdit()
         self._panel_img_path.setPlaceholderText("Path to image file…")
-        self._panel_img_path.setText(
-            self.app_settings.current_settings.get("panel_bg_image", ""))
-        path_lay.addWidget(self._panel_img_path)
+        self._panel_img_path.setText(cs.get("panel_bg_image", ""))
         browse_btn = QPushButton("Browse…")
         browse_btn.clicked.connect(self._browse_panel_bg_image)
-        path_lay.addWidget(browse_btn)
         clear_btn = QPushButton("Clear")
         clear_btn.clicked.connect(lambda: self._panel_img_path.clear())
+        path_lay = QHBoxLayout()
+        path_lay.addWidget(self._panel_img_path, 1)
+        path_lay.addWidget(browse_btn)
         path_lay.addWidget(clear_btn)
-        igl.addLayout(path_lay)
+        igl.addWidget(QLabel("Image:"), 0, 0)
+        igl.addLayout(path_lay, 0, 1, 1, 2)
 
-        mode_lay = QHBoxLayout()
-        mode_lay.addWidget(QLabel("Display:"))
         self._panel_img_mode = QComboBox()
         self._panel_img_mode.addItems([
-            "Tiled", "Stretched", "Centred", "Scaled fit", "Scaled fill"])
-        self._panel_img_mode.setCurrentIndex(
-            self.app_settings.current_settings.get("panel_bg_image_mode", 0))
-        mode_lay.addWidget(self._panel_img_mode)
-        mode_lay.addStretch()
-        igl.addLayout(mode_lay)
+            "Tiled", "Stretched", "Centred", "Scaled fit", "Scaled fill", "Across window"])
+        self._panel_img_mode.setCurrentIndex(cs.get("panel_bg_image_mode", 0))
+        igl.addWidget(QLabel("Display:"), 1, 0)
+        igl.addWidget(self._panel_img_mode, 1, 1)
 
-        blend_lay = QHBoxLayout()
-        blend_lay.addWidget(QLabel("Blend opacity:"))
         self._panel_img_opacity = QSlider(Qt.Orientation.Horizontal)
         self._panel_img_opacity.setRange(0, 100)
-        self._panel_img_opacity.setValue(
-            self.app_settings.current_settings.get("panel_bg_image_opacity", 100))
+        self._panel_img_opacity.setValue(cs.get("panel_bg_image_opacity", 100))
         self._panel_img_opacity_lbl = QLabel(f"{self._panel_img_opacity.value()}%")
+        self._panel_img_opacity_lbl.setFixedWidth(40)
         self._panel_img_opacity.valueChanged.connect(
             lambda v: self._panel_img_opacity_lbl.setText(f"{v}%"))
-        blend_lay.addWidget(self._panel_img_opacity)
-        blend_lay.addWidget(self._panel_img_opacity_lbl)
-        igl.addLayout(blend_lay)
+        self._panel_img_blend_lbl = QLabel("Blend opacity:")
+        igl.addWidget(self._panel_img_blend_lbl, 2, 0)
+        igl.addWidget(self._panel_img_opacity, 2, 1)
+        igl.addWidget(self._panel_img_opacity_lbl, 2, 2)
+
+        self._panel_img_all = QCheckBox("Show through lists, toolbars and tabs (tinted by their colour)")
+        self._panel_img_all.setToolTip("Tint strength: Transparency below, Panels (lists, tabs) and Widgets (toolbars)")
+        self._panel_img_all.setChecked(bool(cs.get("panel_bg_image_all", False)))
+        self._panel_img_all.toggled.connect(
+            lambda on: self.app_settings.current_settings.__setitem__("panel_bg_image_all", on))
+        igl.addWidget(self._panel_img_all, 3, 0, 1, 3)
         il.addWidget(img_group)
 
-        self._img_preview = PanelPreviewWidget(self, "image")
+        def _img_set():  #vers 1
+            """Image-only controls follow whether an image is chosen."""
+            has = bool(self._panel_img_path.text().strip())
+            for w in (self._panel_img_mode, self._panel_img_opacity, self._panel_img_opacity_lbl,
+                      self._panel_img_blend_lbl, self._panel_img_all):
+                w.setEnabled(has)
         self._panel_img_path.textChanged.connect(
             lambda t: [self.app_settings.current_settings.__setitem__("panel_bg_image", t),
-                       self._img_preview.refresh()])
+                       _img_set(), self._img_preview.refresh()])
         self._panel_img_mode.currentIndexChanged.connect(
             lambda i: [self.app_settings.current_settings.__setitem__("panel_bg_image_mode", i),
                        self._img_preview.refresh()])
         self._panel_img_opacity.valueChanged.connect(
             lambda v: [self.app_settings.current_settings.__setitem__("panel_bg_image_opacity", v),
                        self._img_preview.refresh()])
-        il.addStretch()
+        _img_set()
 
-        img_w = QWidget()
-        img_hl = QHBoxLayout(img_w)
-        img_hl.setContentsMargins(0,0,0,0)
-        img_scroll = QScrollArea(); img_scroll.setWidgetResizable(True)
-        img_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        img_scroll.setWidget(img_ctrl)
-        img_hl.addWidget(img_scroll, 55)
-        img_right = QWidget(); img_rl = QVBoxLayout(img_right)
-        img_rl.setContentsMargins(0,0,0,0)
-        img_rl.addWidget(QLabel("Live Preview"))
-        img_rl.addWidget(self._img_preview, 1)
-        img_hl.addWidget(img_right, 45)
-        sub.addTab(img_w, "Image")
-
-        #    Transparency                                                   
-        trans_ctrl = QWidget()
-        tl = QVBoxLayout(trans_ctrl); tl.setSpacing(6)
-
-        for label, key, default in [
-            ("Titlebar",  "titlebar_opacity", 100),
-            ("Panels",    "panel_opacity",    100),
-            ("Buttons",   "button_opacity",   100),
-            ("Widgets",   "widget_opacity",   100),
-        ]:
-            grp = QGroupBox(f"{label} Opacity")
-            grp_l = QHBoxLayout(grp)
+        trans_group = QGroupBox("Transparency (opacity)")
+        trans_group.setAutoFillBackground(True)
+        tgl = QGridLayout(trans_group)
+        tgl.setColumnStretch(1, 1)
+        for r, (label, key, default) in enumerate([
+                ("Titlebar", "titlebar_opacity", 100), ("Panels", "panel_opacity", 100),
+                ("Buttons", "button_opacity", 100), ("Widgets", "widget_opacity", 100)]):
             sl = QSlider(Qt.Orientation.Horizontal)
             sl.setRange(0, 100)
-            sl.setValue(self.app_settings.current_settings.get(key, default))
-            sl.setTickPosition(QSlider.TickPosition.TicksBelow)
-            sl.setTickInterval(10)
+            sl.setValue(cs.get(key, default))
             lbl = QLabel(f"{sl.value()}%")
             lbl.setFixedWidth(40)
             sl.valueChanged.connect(lambda v, l=lbl, k=key: [
                 l.setText(f"{v}%"),
-                self.app_settings.current_settings.__setitem__(k, v)])
-            grp_l.addWidget(sl); grp_l.addWidget(lbl)
-            tl.addWidget(grp)
+                self.app_settings.current_settings.__setitem__(k, v),
+                self._trans_preview.refresh()])
+            tgl.addWidget(QLabel(f"{label}:"), r, 0)
+            tgl.addWidget(sl, r, 1)
+            tgl.addWidget(lbl, r, 2)
             setattr(self, f"_{key}_slider", sl)
-        tl.addStretch()
+        il.addWidget(trans_group)
+        il.addStretch()
 
-        self._trans_preview = PanelPreviewWidget(self, "transparency")
-        for key in ("titlebar_opacity","panel_opacity","button_opacity","widget_opacity"):
-            sl = getattr(self, f"_{key}_slider", None)
-            if sl:
-                sl.valueChanged.connect(lambda _: self._trans_preview.refresh())
-
-        trans_w = QWidget(); trans_hl = QHBoxLayout(trans_w)
-        trans_hl.setContentsMargins(0,0,0,0)
-        trans_scroll = QScrollArea(); trans_scroll.setWidgetResizable(True)
-        trans_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        trans_scroll.setWidget(trans_ctrl)
-        trans_hl.addWidget(trans_scroll, 55)
-        trans_right = QWidget(); trans_rl = QVBoxLayout(trans_right)
-        trans_rl.setContentsMargins(0,0,0,0)
-        trans_rl.addWidget(QLabel("Panel over checkerboard"))
-        trans_rl.addWidget(self._trans_preview, 1)
-        trans_hl.addWidget(trans_right, 45)
-        sub.addTab(trans_w, "Transparency")
-
-        #    Gadgets                                                        
-        gadgets_inner = self._create_advanced_gadgets_tab()
-        sub.addTab(gadgets_inner, "Gadgets")
-
-        root.addWidget(sub)
+        bg_scroll = QScrollArea(); bg_scroll.setWidgetResizable(True)
+        bg_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        bg_scroll.setWidget(bg_ctrl)
+        side.addTab(bg_scroll, "Background")
+        side.addTab(self._create_advanced_gadgets_tab(), "Gadgets")
+        root.addWidget(side, 1)
         return tab
 
-    def _refresh_panel_previews(self): #vers 1
+    def _refresh_panel_previews(self): #vers 2
         """Refresh all PanelPreviewWidget instances in the dialog."""
         for attr in ("_fill_preview", "_hero_preview", "_grad_preview",
                      "_pat_preview", "_copper_preview", "_img_preview",
-                     "_trans_preview"):
+                     "_trans_preview", "_effect_preview", "_hero_side_preview"):
             pw = getattr(self, attr, None)
             if pw:
                 pw.refresh()
@@ -7853,6 +8104,31 @@ Ready for operations..."""
                 if pw:
                     pw.refresh()
 
+    def _on_color_alpha_changed(self, key, value): #vers 1
+        """Store a colour's transparency; 100 removes it."""
+        alpha = dict(self.app_settings.current_settings.get("color_alpha", {}))
+        if value >= 100:
+            alpha.pop(key, None)
+        else:
+            alpha[key] = int(value)
+        self.app_settings.current_settings["color_alpha"] = alpha
+
+    def _load_panel_controls(self): #vers 2
+        """Show current panel image, transparency and colour alpha settings."""
+        cs = self.app_settings.current_settings
+        for key, ed in getattr(self, 'color_editors', {}).items():
+            if key in ALPHA_COLOR_KEYS:
+                ed.set_alpha(cs.get("color_alpha", {}).get(key, 100))
+        if hasattr(self, '_panel_img_path'):
+            self._panel_img_path.setText(cs.get("panel_bg_image", ""))
+            self._panel_img_mode.setCurrentIndex(int(cs.get("panel_bg_image_mode", 0)))
+            self._panel_img_opacity.setValue(int(cs.get("panel_bg_image_opacity", 100)))
+            self._panel_img_all.setChecked(bool(cs.get("panel_bg_image_all", False)))
+        for key in ("titlebar_opacity", "panel_opacity", "button_opacity", "widget_opacity"):
+            sl = getattr(self, f"_{key}_slider", None)
+            if sl is not None:
+                sl.setValue(int(cs.get(key, 100)))
+
     def _browse_panel_bg_image(self): #vers 1
         """Browse for panel background image."""
         from PyQt6.QtWidgets import QFileDialog
@@ -7863,7 +8139,7 @@ Ready for operations..."""
             self._panel_img_path.setText(path)
             self.app_settings.current_settings["panel_bg_image"] = path
 
-    def _create_ui_management_tab_v2(self): #vers 2
+    def _create_ui_management_tab_v2(self): #vers 3
         """UI Management tab — existing components + Progress Bar styles."""
         from PyQt6.QtWidgets import QScrollArea
 
@@ -7880,9 +8156,10 @@ Ready for operations..."""
         pb_tab = QWidget()
         pl = QVBoxLayout(pb_tab)
 
-        style_group = QGroupBox("Progress Bar Style")
+        style_group = QGroupBox("Progress Bar")
         style_group.setAutoFillBackground(True)
-        sgl = QVBoxLayout(style_group)
+        sgl = QGridLayout(style_group)
+        sgl.setHorizontalSpacing(8)
 
         PB_STYLES = [
             ("system",      "System default"),
@@ -7896,43 +8173,39 @@ Ready for operations..."""
         ]
 
         current_pb = self.app_settings.current_settings.get("progressbar_style", "system")
-        self._pb_style_radios = {}
-        pb_grid = QGridLayout()
-        for i, (key, label) in enumerate(PB_STYLES):
-            rb = QRadioButton(label)
-            rb.setChecked(key == current_pb)
-            rb.toggled.connect(
-                lambda checked, k=key:
-                self.app_settings.current_settings.__setitem__("progressbar_style", k)
-                if checked else None)
-            self._pb_style_radios[key] = rb
-            pb_grid.addWidget(rb, i // 2, i % 2)
-        sgl.addLayout(pb_grid)
-        pl.addWidget(style_group)
+        self._pb_style_combo = QComboBox()
+        for key, label in PB_STYLES:
+            self._pb_style_combo.addItem(label, key)
+        self._pb_style_combo.setCurrentIndex(max(0, self._pb_style_combo.findData(current_pb)))
+        self._pb_style_combo.currentIndexChanged.connect(
+            lambda i: self.app_settings.current_settings.__setitem__(
+                "progressbar_style", self._pb_style_combo.itemData(i)))
+        sgl.addWidget(QLabel("Style -"), 0, 0)
+        sgl.addWidget(self._pb_style_combo, 0, 1, 1, 6)
 
-        colour_group = QGroupBox("Progress Bar Colours")
-        colour_group.setAutoFillBackground(True)
-        cgl = QGridLayout(colour_group)
-
-        for row, (label, key, default) in enumerate([
-            ("Fill colour:",       "progressbar_fill",       "#4a7a9b"),
-            ("Background colour:", "progressbar_bg",         "#1a1a2e"),
-            ("Text colour:",       "progressbar_text",       "#ffffff"),
-            ("Stripe colour:",     "progressbar_stripe",     "#5a9abf"),
+        sgl.addWidget(QLabel("Colours -"), 1, 0)
+        for k, (label, key, default) in enumerate([
+            ("Fill colour",       "progressbar_fill",       "#4a7a9b"),
+            ("Background colour", "progressbar_bg",         "#1a1a2e"),
+            ("Text colour",       "progressbar_text",       "#ffffff"),
+            ("Stripe colour",     "progressbar_stripe",     "#5a9abf"),
         ]):
-            cgl.addWidget(QLabel(label), row, 0)
             btn = QPushButton()
-            btn.setFixedHeight(22)
+            btn.setFixedSize(40, 22)
             val = self.app_settings.current_settings.get(key, default)
             btn.setStyleSheet(f"background:{val};")
+            btn.setToolTip(f"{label}: click to pick")
             btn.clicked.connect(lambda _, k=key, b=btn: self._pick_panel_colour(k, b))
-            cgl.addWidget(btn, row, 1)
+            cell = QHBoxLayout()
+            cell.addWidget(QLabel(label))
+            cell.addWidget(btn)
+            sgl.addLayout(cell, 1 + k // 2, 1 + (k % 2) * 3, 1, 3)
+        sgl.setColumnStretch(7, 1)
 
-        pl.addWidget(colour_group)
-
-        height_group = QGroupBox("Height")
-        height_group.setAutoFillBackground(True)
-        hgl = QHBoxLayout(height_group)
+        hgl = QHBoxLayout()
+        sgl.addWidget(QLabel("Height -"), 3, 0)
+        sgl.addLayout(hgl, 3, 1, 1, 7)
+        pl.addWidget(style_group)
         self._pb_height_slider = QSlider(Qt.Orientation.Horizontal)
         self._pb_height_slider.setRange(8, 32)
         self._pb_height_slider.setValue(
@@ -7942,7 +8215,6 @@ Ready for operations..."""
             lambda v: self._pb_height_lbl.setText(f"{v}px"))
         hgl.addWidget(self._pb_height_slider)
         hgl.addWidget(self._pb_height_lbl)
-        pl.addWidget(height_group)
         pl.addStretch()
 
         sub.addTab(pb_tab, "Progress Bars")
@@ -8957,238 +9229,84 @@ Ready for operations..."""
             self.shadow_color_button.setText(f"Selected: {color.name()}")
             print(f"Shadow color selected: {color.name()}")
 
-    def _create_ui_management_tab(self): #vers 1
-        """Create UI Management Components tab - Group, Scrollbar, Listview, Register, Virtgroup, Scrollgroup, Popobject"""
+    def _create_ui_management_tab(self): #vers 2
+        """UI Management components as a compact table like Fonts:
+        Name - Background colour [swatch]  Border colour [swatch] ..."""
+        from PyQt6.QtWidgets import QGridLayout
         tab = QWidget()
         layout = QVBoxLayout(tab)
+        layout.setContentsMargins(4, 4, 4, 4)
 
-        # Instructions
-        info_label = QLabel(
-            "<b>UI Management Components:</b><br>"
-            "Configure container and management components for UI layout."
-        )
-        info_label.setWordWrap(True)
-        info_label.setStyleSheet("padding: 8px; border-radius: 4px;")
-        layout.addWidget(info_label)
-
-        # Scroll area for controls
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        table = QGroupBox("UI Management Components")
+        table.setAutoFillBackground(True)
+        grid = QGridLayout(table)
+        grid.setHorizontalSpacing(8)
+        grid.setVerticalSpacing(4)
+        grid.setColumnStretch(7, 1)
 
-        scroll_widget = QWidget()
-        scroll_layout = QVBoxLayout(scroll_widget)
-        scroll_layout.setSpacing(15)
+        COMPONENTS = [
+            ("Group",       [("group_bg", "Background colour"), ("group_border", "Border colour")]),
+            ("Scrollbar",   [("scrollbar_bg", "Background colour"), ("scrollbar_handle", "Handle colour")]),
+            ("Listview",    [("listview_bg", "Background colour"), ("listview_text", "Text colour"),
+                             ("listview_select", "Selection colour")]),
+            ("Register",    [("register_bg", "Background colour"), ("register_text", "Text colour")]),
+            ("Virtgroup",   [("virtgroup_bg", "Background colour"), ("virtgroup_border", "Border colour")]),
+            ("Scrollgroup", [("scrollgroup_bg", "Background colour"), ("scrollgroup_border", "Border colour")]),
+            ("Popobject",   [("popobject_bg", "Background colour"), ("popobject_border", "Border colour")]),
+        ]
+        tc = self.app_settings.get_theme_colors() or {}
+        THEME_FALLBACK = {"group_bg": "panel_bg", "group_border": "border",
+                          "scrollbar_bg": "scrollbar_background", "scrollbar_handle": "scrollbar_handle",
+                          "listview_bg": "bg_primary", "listview_text": "text_primary",
+                          "listview_select": "selection_background", "register_bg": "bg_secondary",
+                          "register_text": "text_primary", "virtgroup_bg": "bg_tertiary",
+                          "virtgroup_border": "border", "scrollgroup_bg": "bg_secondary",
+                          "scrollgroup_border": "border", "popobject_bg": "bg_secondary",
+                          "popobject_border": "border"}
+        row = 0
+        for name, colours in COMPONENTS:
+            grid.addWidget(QLabel(f"{name} Components -"), row, 0)
+            for k, (comp, label) in enumerate(colours):
+                grid.addWidget(QLabel(label), row, 1 + k * 2)
+                sw = QPushButton()
+                sw.setFixedSize(40, 22)
+                sw.setToolTip(f"{name} {label.lower()}: click to pick")
+                val = getattr(self, f"{comp}_color_value", None) or tc.get(THEME_FALLBACK.get(comp, ''), '')
+                sw.setStyleSheet(f"background-color: {val};" if val else "")
+                sw.clicked.connect(lambda _=False, c=comp: self._select_color_for_component(c))
+                setattr(self, f"{comp}_color", sw)
+                grid.addWidget(sw, row, 2 + k * 2)
+            row += 1
+            if name == "Scrollbar":
+                wl = QHBoxLayout()
+                wl.addWidget(QLabel("Width"))
+                self.ui_scrollbar_width_slider = QSlider(Qt.Orientation.Horizontal)
+                self.ui_scrollbar_width_slider.setRange(8, 20)
+                self.ui_scrollbar_width_slider.setValue(12)
+                self.ui_scrollbar_width_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
+                self.ui_scrollbar_width_slider.setTickInterval(2)
+                wl.addWidget(self.ui_scrollbar_width_slider, 1)
+                self.ui_scrollbar_width_label = QLabel("12 px")
+                self.ui_scrollbar_width_label.setFixedWidth(44)
+                self.ui_scrollbar_width_slider.valueChanged.connect(
+                    lambda v: self.ui_scrollbar_width_label.setText(f"{v} px"))
+                wl.addWidget(self.ui_scrollbar_width_label)
+                grid.addLayout(wl, row, 1, 1, 7)
+                row += 1
 
-        # Group Components
-        group_group = QGroupBox("Group Components")
-        group_group.setAutoFillBackground(True)
-        group_layout = QVBoxLayout(group_group)
-
-        # Group Background Color
-        group_bg_layout = QHBoxLayout()
-        group_bg_layout.addWidget(QLabel("Background Color:"))
-        self.group_bg_color = QPushButton("Select Color")
-        self.group_bg_color.clicked.connect(lambda: self._select_color_for_component("group_bg"))
-        group_bg_layout.addWidget(self.group_bg_color)
-        group_bg_layout.addStretch()
-        group_layout.addLayout(group_bg_layout)
-
-        # Group Border Color
-        group_border_layout = QHBoxLayout()
-        group_border_layout.addWidget(QLabel("Border Color:"))
-        self.group_border_color = QPushButton("Select Color")
-        self.group_border_color.clicked.connect(lambda: self._select_color_for_component("group_border"))
-        group_border_layout.addWidget(self.group_border_color)
-        group_border_layout.addStretch()
-        group_layout.addLayout(group_border_layout)
-
-        scroll_layout.addWidget(group_group)
-
-        # Scrollbar Components
-        scrollbar_group = QGroupBox("Scrollbar Components")
-        scrollbar_group.setAutoFillBackground(True)
-        scrollbar_layout = QVBoxLayout(scrollbar_group)
-
-        # Scrollbar Background Color
-        scrollbar_bg_layout = QHBoxLayout()
-        scrollbar_bg_layout.addWidget(QLabel("Background Color:"))
-        self.scrollbar_bg_color = QPushButton("Select Color")
-        self.scrollbar_bg_color.clicked.connect(lambda: self._select_color_for_component("scrollbar_bg"))
-        scrollbar_bg_layout.addWidget(self.scrollbar_bg_color)
-        scrollbar_bg_layout.addStretch()
-        scrollbar_layout.addLayout(scrollbar_bg_layout)
-
-        # Scrollbar Handle Color
-        scrollbar_handle_layout = QHBoxLayout()
-        scrollbar_handle_layout.addWidget(QLabel("Handle Color:"))
-        self.scrollbar_handle_color = QPushButton("Select Color")
-        self.scrollbar_handle_color.clicked.connect(lambda: self._select_color_for_component("scrollbar_handle"))
-        scrollbar_handle_layout.addWidget(self.scrollbar_handle_color)
-        scrollbar_handle_layout.addStretch()
-        scrollbar_layout.addLayout(scrollbar_handle_layout)
-
-        # Scrollbar Width
-        scrollbar_width_layout = QHBoxLayout()
-        scrollbar_width_layout.addWidget(QLabel("Width:"))
-        self.scrollbar_width_slider = QSlider(Qt.Orientation.Horizontal)
-        self.scrollbar_width_slider.setRange(8, 20)
-        self.scrollbar_width_slider.setValue(12)
-        self.scrollbar_width_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        self.scrollbar_width_slider.setTickInterval(2)
-        scrollbar_width_layout.addWidget(self.scrollbar_width_slider)
-        self.scrollbar_width_label = QLabel("12px")
-        self.scrollbar_width_label.setFixedWidth(40)
-        scrollbar_width_layout.addWidget(self.scrollbar_width_label)
-        scrollbar_layout.addLayout(scrollbar_width_layout)
-
-        self.scrollbar_width_slider.valueChanged.connect(
-            lambda v: self.scrollbar_width_label.setText(f"{v}px")
-        )
-
-        scroll_layout.addWidget(scrollbar_group)
-
-        # Listview Components
-        listview_group = QGroupBox("Listview Components")
-        listview_group.setAutoFillBackground(True)
-        listview_layout = QVBoxLayout(listview_group)
-
-        # Listview Background Color
-        listview_bg_layout = QHBoxLayout()
-        listview_bg_layout.addWidget(QLabel("Background Color:"))
-        self.listview_bg_color = QPushButton("Select Color")
-        self.listview_bg_color.clicked.connect(lambda: self._select_color_for_component("listview_bg"))
-        listview_bg_layout.addWidget(self.listview_bg_color)
-        listview_bg_layout.addStretch()
-        listview_layout.addLayout(listview_bg_layout)
-
-        # Listview Text Color
-        listview_text_layout = QHBoxLayout()
-        listview_text_layout.addWidget(QLabel("Text Color:"))
-        self.listview_text_color = QPushButton("Select Color")
-        self.listview_text_color.clicked.connect(lambda: self._select_color_for_component("listview_text"))
-        listview_text_layout.addWidget(self.listview_text_color)
-        listview_text_layout.addStretch()
-        listview_layout.addLayout(listview_text_layout)
-
-        # Listview Selection Color
-        listview_select_layout = QHBoxLayout()
-        listview_select_layout.addWidget(QLabel("Selection Color:"))
-        self.listview_select_color = QPushButton("Select Color")
-        self.listview_select_color.clicked.connect(lambda: self._select_color_for_component("listview_select"))
-        listview_select_layout.addWidget(self.listview_select_color)
-        listview_select_layout.addStretch()
-        listview_layout.addLayout(listview_select_layout)
-
-        scroll_layout.addWidget(listview_group)
-
-        # Register Components
-        register_group = QGroupBox("Register Components")
-        register_group.setAutoFillBackground(True)
-        register_layout = QVBoxLayout(register_group)
-
-        # Register Background Color
-        register_bg_layout = QHBoxLayout()
-        register_bg_layout.addWidget(QLabel("Background Color:"))
-        self.register_bg_color = QPushButton("Select Color")
-        self.register_bg_color.clicked.connect(lambda: self._select_color_for_component("register_bg"))
-        register_bg_layout.addWidget(self.register_bg_color)
-        register_bg_layout.addStretch()
-        register_layout.addLayout(register_bg_layout)
-
-        # Register Text Color
-        register_text_layout = QHBoxLayout()
-        register_text_layout.addWidget(QLabel("Text Color:"))
-        self.register_text_color = QPushButton("Select Color")
-        self.register_text_color.clicked.connect(lambda: self._select_color_for_component("register_text"))
-        register_text_layout.addWidget(self.register_text_color)
-        register_text_layout.addStretch()
-        register_layout.addLayout(register_text_layout)
-
-        scroll_layout.addWidget(register_group)
-
-        # Virtgroup Components
-        virtgroup_group = QGroupBox("Virtgroup Components")
-        virtgroup_group.setAutoFillBackground(True)
-        virtgroup_layout = QVBoxLayout(virtgroup_group)
-
-        # Virtgroup Background Color
-        virtgroup_bg_layout = QHBoxLayout()
-        virtgroup_bg_layout.addWidget(QLabel("Background Color:"))
-        self.virtgroup_bg_color = QPushButton("Select Color")
-        self.virtgroup_bg_color.clicked.connect(lambda: self._select_color_for_component("virtgroup_bg"))
-        virtgroup_bg_layout.addWidget(self.virtgroup_bg_color)
-        virtgroup_bg_layout.addStretch()
-        virtgroup_layout.addLayout(virtgroup_bg_layout)
-
-        # Virtgroup Border Color
-        virtgroup_border_layout = QHBoxLayout()
-        virtgroup_border_layout.addWidget(QLabel("Border Color:"))
-        self.virtgroup_border_color = QPushButton("Select Color")
-        self.virtgroup_border_color.clicked.connect(lambda: self._select_color_for_component("virtgroup_border"))
-        virtgroup_border_layout.addWidget(self.virtgroup_border_color)
-        virtgroup_border_layout.addStretch()
-        virtgroup_layout.addLayout(virtgroup_border_layout)
-
-        scroll_layout.addWidget(virtgroup_group)
-
-        # Scrollgroup Components
-        scrollgroup_group = QGroupBox("Scrollgroup Components")
-        scrollgroup_group.setAutoFillBackground(True)
-        scrollgroup_layout = QVBoxLayout(scrollgroup_group)
-
-        # Scrollgroup Background Color
-        scrollgroup_bg_layout = QHBoxLayout()
-        scrollgroup_bg_layout.addWidget(QLabel("Background Color:"))
-        self.scrollgroup_bg_color = QPushButton("Select Color")
-        self.scrollgroup_bg_color.clicked.connect(lambda: self._select_color_for_component("scrollgroup_bg"))
-        scrollgroup_bg_layout.addWidget(self.scrollgroup_bg_color)
-        scrollgroup_bg_layout.addStretch()
-        scrollgroup_layout.addLayout(scrollgroup_bg_layout)
-
-        # Scrollgroup Border Color
-        scrollgroup_border_layout = QHBoxLayout()
-        scrollgroup_border_layout.addWidget(QLabel("Border Color:"))
-        self.scrollgroup_border_color = QPushButton("Select Color")
-        self.scrollgroup_border_color.clicked.connect(lambda: self._select_color_for_component("scrollgroup_border"))
-        scrollgroup_border_layout.addWidget(self.scrollgroup_border_color)
-        scrollgroup_border_layout.addStretch()
-        scrollgroup_layout.addLayout(scrollgroup_border_layout)
-
-        scroll_layout.addWidget(scrollgroup_group)
-
-        # Popobject Components
-        popobject_group = QGroupBox("Popobject Components")
-        popobject_group.setAutoFillBackground(True)
-        popobject_layout = QVBoxLayout(popobject_group)
-
-        # Popobject Background Color
-        popobject_bg_layout = QHBoxLayout()
-        popobject_bg_layout.addWidget(QLabel("Background Color:"))
-        self.popobject_bg_color = QPushButton("Select Color")
-        self.popobject_bg_color.clicked.connect(lambda: self._select_color_for_component("popobject_bg"))
-        popobject_bg_layout.addWidget(self.popobject_bg_color)
-        popobject_bg_layout.addStretch()
-        popobject_layout.addLayout(popobject_bg_layout)
-
-        # Popobject Border Color
-        popobject_border_layout = QHBoxLayout()
-        popobject_border_layout.addWidget(QLabel("Border Color:"))
-        self.popobject_border_color = QPushButton("Select Color")
-        self.popobject_border_color.clicked.connect(lambda: self._select_color_for_component("popobject_border"))
-        popobject_border_layout.addWidget(self.popobject_border_color)
-        popobject_border_layout.addStretch()
-        popobject_layout.addLayout(popobject_border_layout)
-
-        scroll_layout.addWidget(popobject_group)
-
-        scroll_layout.addStretch()
-        scroll.setWidget(scroll_widget)
+        outer = QWidget()
+        ol = QVBoxLayout(outer)
+        ol.setContentsMargins(0, 0, 0, 0)
+        ol.addWidget(table)
+        ol.addStretch()
+        scroll.setWidget(outer)
         layout.addWidget(scroll)
-
         return tab
 
-    def _select_color_for_component(self, component_type): #vers 1
+    def _select_color_for_component(self, component_type): #vers 2
         """Open color dialog to select color for specific UI component type"""
         from PyQt6.QtWidgets import QColorDialog
         from PyQt6.QtGui import QColor
@@ -9218,10 +9336,11 @@ Ready for operations..."""
             }
             
             if component_type in button_map:
-                button_map[component_type].setText(f"Selected: {color_name}")
-            
-            # Store the color for later use
-            setattr(self, f"{component_type}_color", color_name)
+                button_map[component_type].setStyleSheet(f"background-color: {color_name};")
+                button_map[component_type].setToolTip(color_name)
+
+            # Store the color for later use (the _color attribute is the swatch button)
+            setattr(self, f"{component_type}_color_value", color_name)
             print(f"{component_type} color selected: {color_name}")
 
     # ===== GLOBAL SLIDER HANDLERS =====
@@ -9323,7 +9442,7 @@ Ready for operations..."""
 
     # ===== THEME MANAGEMENT =====
 
-    def _on_theme_changed(self, theme_name): #vers 3
+    def _on_theme_changed(self, theme_name): #vers 4
         """Handle theme selection change — applies live to entire app when checked."""
         theme_key = None
         for key, data in self.app_settings.themes.items():
@@ -9335,6 +9454,8 @@ Ready for operations..."""
             return
 
         self._load_theme_colors(theme_key)
+        self.app_settings.apply_theme_effects(theme_key)
+        self._load_panel_controls()
 
         # Re-apply stylesheet so dialog colours update immediately
         try:
@@ -9612,11 +9733,8 @@ Ready for operations..."""
         # Panel effect + button style
         if hasattr(self, "_panel_effect_combo") and self._panel_effect_combo:
             settings["panel_effect_type"] =                 ["none","fill","gradient","pattern"][self._panel_effect_combo.currentIndex()]
-        if hasattr(self, "_btn_style_radios"):
-            for key, rb in self._btn_style_radios.items():
-                if rb.isChecked():
-                    settings["button_style"] = key
-                    break
+        if hasattr(self, "_btn_style_combo"):
+            settings["button_style"] = self._btn_style_combo.currentData()
         if hasattr(self, "_tint_enabled_cb") and self._tint_enabled_cb:
             settings["use_pastel_buttons"] = self._tint_enabled_cb.isChecked()
 
@@ -9642,6 +9760,36 @@ Ready for operations..."""
 
         return settings
 
+    def _collect_settings_contributions(self): #vers 1
+        """Find any docked tool currently open as a tab in the main
+        window that exposes get_settings_contribution()"""
+        contributions = []
+        mw = getattr(self, 'main_window', None)
+        tab_widget = getattr(mw, 'main_tab_widget', None)
+        if tab_widget is None:
+            return contributions
+        seen_ids = set()
+        for i in range(tab_widget.count()):
+            page = tab_widget.widget(i)
+            if page is None:
+                continue
+            candidates = [page] + page.findChildren(QWidget)
+            for w in candidates:
+                if id(w) in seen_ids:
+                    continue
+                get_contrib = getattr(w, 'get_settings_contribution', None)
+                if get_contrib is None or not callable(get_contrib):
+                    continue
+                seen_ids.add(id(w))
+                try:
+                    extra_tabs, apply_fn = get_contrib()
+                except Exception as e:
+                    print(f"[Settings] get_settings_contribution failed for {w}: {e}")
+                    continue
+                contributions.extend(extra_tabs)
+                if callable(apply_fn):
+                    self._extra_apply_callbacks.append(apply_fn)
+        return contributions
 
     def _apply_settings(self): #vers 6
         """Apply settings permanently and save to appfactory.settings.json AND theme files"""
@@ -9725,6 +9873,14 @@ Ready for operations..."""
         except Exception as _pe:
             print(f"Panel effects error: {_pe}")
 
+        # Apply any settings contributed by docked tools (Map
+        # Workshop, etc.)
+        for extra_apply in getattr(self, '_extra_apply_callbacks', []):
+            try:
+                extra_apply()
+            except Exception as e:
+                print(f"[Settings] A docked tool's settings apply failed: {e}")
+
         QMessageBox.information(
             self,
             "Applied",
@@ -9768,7 +9924,7 @@ Ready for operations..."""
 
 
 
-    def _save_current_theme(self): #vers 2
+    def _save_current_theme(self): #vers 3
         """Save modifications to the currently selected theme file in themes/"""
         current_theme_key = self.theme_selector_combo.currentData()
 
@@ -9787,14 +9943,14 @@ Ready for operations..."""
         for color_key, editor in self.color_editors.items():
             theme_data["colors"][color_key] = editor.color_input.text()
 
-        # Save panel effect settings into theme (non-colour controls)
+        # Save panel effect, image and transparency settings into theme
         cs = self.app_settings.current_settings
-        for key in ("panel_fill_dir", "panel_grad_dir", "panel_pattern_style",
-                    "panel_pattern_scale", "panel_effect_type",
-                    "panel_bg_image", "panel_bg_image_mode", "panel_bg_image_opacity",
-                    "button_style", "progressbar_style", "progressbar_height"):
+        for key in THEME_EFFECT_KEYS:
             if key in cs:
                 theme_data[key] = cs[key]
+        if theme_data.get("panel_bg_image"):
+            theme_data["panel_bg_image"] = store_panel_image(theme_data["panel_bg_image"],
+                                                             self.app_settings.themes_dir)
 
         # Collect gadget styles if modified
         if hasattr(self, '_gadget_modified') and self._gadget_modified:
@@ -9820,7 +9976,7 @@ Ready for operations..."""
             )
 
 
-    def _save_theme_as(self): #vers 7
+    def _save_theme_as(self): #vers 8
         """Save current theme as a new theme with file dialog - PRESERVES ALL DATA"""
         from PyQt6.QtWidgets import QInputDialog, QFileDialog, QMessageBox
         import json
@@ -9859,11 +10015,9 @@ Ready for operations..."""
             if color_key in theme_data["colors"] or color_key in self.theme_colors:
                 theme_data["colors"][color_key] = editor.color_input.text()
 
-        # Save panel effect settings at theme root level
+        # Save panel effect, image and transparency settings at theme root level
         cs = self.app_settings.current_settings
-        for key in ("panel_fill_dir", "panel_grad_dir", "panel_pattern_style",
-                    "panel_pattern_scale", "panel_effect_type",
-                    "button_style", "progressbar_style", "progressbar_height"):
+        for key in THEME_EFFECT_KEYS:
             if key in cs:
                 theme_data[key] = cs[key]
 
@@ -9899,6 +10053,9 @@ Ready for operations..."""
         # Ensure .json extension
         if not file_path.endswith('.json'):
             file_path += '.json'
+        if theme_data.get("panel_bg_image"):                 # image travels with the json
+            theme_data["panel_bg_image"] = store_panel_image(theme_data["panel_bg_image"],
+                                                             os.path.dirname(file_path))
 
         # Save theme file
         try:
