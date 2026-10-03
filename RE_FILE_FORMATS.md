@@ -340,10 +340,7 @@ One BSS file serves both scenarios (shared background)
 
 ---
 
-## Why RE is different from GTA (DFF/TXD)
-
-GTA uses a real-time 3D engine — every asset is a mesh with a texture.
-RE1/2/3 uses a **hybrid engine**:
+## Misc info and Credits
 
 - The **world** is a pre-rendered image (BSS/ADT/PAK) — not a 3D model at all
 - The **collision** is a separate mathematical description (SCA floor rects)
