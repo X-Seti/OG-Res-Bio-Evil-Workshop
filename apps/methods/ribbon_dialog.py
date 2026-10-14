@@ -1,4 +1,4 @@
-#this belongs in apps/methods/ribbon_dialog.py - Version: 1
+#this belongs in apps/methods/ribbon_dialog.py - Version: 2
 # X-Seti - October 3 2026 - Multi-Emulator Launcher - Ribbon Manager dialog
 
 """ribbon_dialog.py - Ribbon Manager for MEL windows.
@@ -25,6 +25,7 @@ toolbar_presets.
 # RibbonManagerDialog._create_toolbar
 # RibbonManagerDialog._delete_divider
 # RibbonManagerDialog._delete_toolbar
+# RibbonManagerDialog._item_action
 # RibbonManagerDialog._load_preset
 # RibbonManagerDialog._move_action
 # RibbonManagerDialog._on_accept
@@ -195,31 +196,42 @@ class RibbonManagerDialog(QDialog): #vers 1
         self._size_value_label.setText(f"{px}px")
         self._ws._apply_icon_scale(px)
 
-    def _refresh_toolbar_list(self): #vers 1
+    def _refresh_toolbar_list(self): #vers 2
         """Fill the left pane with every toolbar"""
         self._tb_list.clear()
         self._move_combo.clear()
+        self._tb_objs = []                         # Python refs; item data holds the index
         for tb in self._ws.ribbon_toolbars():
+            self._tb_objs.append(tb)
             name = tb.windowTitle() or tb.objectName()
             item = QListWidgetItem(name)
-            item.setData(Qt.ItemDataRole.UserRole, tb)
+            item.setData(Qt.ItemDataRole.UserRole, len(self._tb_objs) - 1)
             acts = [a for a in tb.actions() if not a.isSeparator() and not a.icon().isNull()]
             if acts:
                 item.setIcon(acts[0].icon())
             self._tb_list.addItem(item)
-            self._move_combo.addItem(name, tb)
+            self._move_combo.addItem(name, len(self._tb_objs) - 1)
 
-    def _on_toolbar_selected(self, row): #vers 1
+    def _item_action(self, item): #vers 1
+        """QAction for an action-list item (None for none)"""
+        if item is None:
+            return None
+        idx = item.data(Qt.ItemDataRole.UserRole)
+        objs = getattr(self, '_act_objs', [])
+        return objs[idx] if isinstance(idx, int) and 0 <= idx < len(objs) else None
+
+    def _on_toolbar_selected(self, row): #vers 2
         """Show the buttons of the selected toolbar"""
         item = self._tb_list.item(row)
         if not item:
             return
-        self._selected_tb = item.data(Qt.ItemDataRole.UserRole)
+        self._selected_tb = self._tb_objs[item.data(Qt.ItemDataRole.UserRole)]
         self._refresh_action_list()
 
-    def _refresh_action_list(self): #vers 1
+    def _refresh_action_list(self): #vers 2
         """Fill the right pane with the selected toolbar's buttons"""
         self._act_list.clear()
+        self._act_objs = []                        # Python refs; item data holds the index
         tb = self._selected_tb
         if not tb:
             return
@@ -237,19 +249,20 @@ class RibbonManagerDialog(QDialog): #vers 1
                 item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
                 item.setCheckState(Qt.CheckState.Checked if act.isVisible()
                                    else Qt.CheckState.Unchecked)
-            item.setData(Qt.ItemDataRole.UserRole, act)
+            self._act_objs.append(act)
+            item.setData(Qt.ItemDataRole.UserRole, len(self._act_objs) - 1)
             self._act_list.blockSignals(True)
             self._act_list.addItem(item)
             self._act_list.blockSignals(False)
 
-    def _on_action_reordered(self): #vers 1
+    def _on_action_reordered(self): #vers 2
         """Apply the dragged order to the toolbar"""
         tb = self._selected_tb
         if not tb:
             return
         new_order = []
         for i in range(self._act_list.count()):
-            act = self._act_list.item(i).data(Qt.ItemDataRole.UserRole)
+            act = self._item_action(self._act_list.item(i))
             if act:
                 new_order.append(act)
         for act in list(tb.actions()):
@@ -257,9 +270,9 @@ class RibbonManagerDialog(QDialog): #vers 1
         for act in new_order:
             tb.addAction(act)
 
-    def _on_item_checked(self, item): #vers 1
+    def _on_item_checked(self, item): #vers 2
         """Tick shows the button on the ribbon, untick hides it"""
-        act = item.data(Qt.ItemDataRole.UserRole)
+        act = self._item_action(item)
         if act is not None and not act.isSeparator():
             act.setVisible(item.checkState() == Qt.CheckState.Checked)
 
@@ -277,23 +290,24 @@ class RibbonManagerDialog(QDialog): #vers 1
             tb.addSeparator()
         self._refresh_action_list()
 
-    def _delete_divider(self): #vers 1
+    def _delete_divider(self): #vers 2
         """Remove the selected divider"""
         item = self._act_list.currentItem()
-        act = item.data(Qt.ItemDataRole.UserRole) if item else None
+        act = self._item_action(item)
         if act is None or not act.isSeparator() or not self._selected_tb:
             self._ws._set_status("Select a divider to delete")
             return
         self._selected_tb.removeAction(act)
         self._refresh_action_list()
 
-    def _move_action(self): #vers 1
+    def _move_action(self): #vers 2
         """Move the selected button to the chosen toolbar"""
         item = self._act_list.currentItem()
-        act = item.data(Qt.ItemDataRole.UserRole) if item else None
+        act = self._item_action(item)
         if not act or not self._selected_tb or act.isSeparator():
             return
-        target_tb = self._move_combo.currentData()
+        idx = self._move_combo.currentData()
+        target_tb = self._tb_objs[idx] if idx is not None else None
         if not target_tb or target_tb is self._selected_tb:
             return
         self._selected_tb.removeAction(act)
@@ -330,10 +344,10 @@ class RibbonManagerDialog(QDialog): #vers 1
         self._refresh_toolbar_list()
         self._act_list.clear()
 
-    def _selected_entry_name(self): #vers 1
+    def _selected_entry_name(self): #vers 2
         """Registered name of the selected button, None if not iconable"""
         item = self._act_list.currentItem()
-        act = item.data(Qt.ItemDataRole.UserRole) if item else None
+        act = self._item_action(item)
         for entry in getattr(self._ws, '_ribbon_actions', []):
             if entry['action'] is act:
                 return entry['name']
