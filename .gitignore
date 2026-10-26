@@ -3,3 +3,12 @@ __pycache__/
 Biohazard 2 CD1_snapshot.json
 SLUS_00923_snapshot.json
 *.desktop
+
+# Build output (made by buildscript.py / GitHub Actions; releases hold the downloads)
+build/
+dist/
+/_internal/
+/*.exe
+apps/utils
+apps/themes
+apps/images
