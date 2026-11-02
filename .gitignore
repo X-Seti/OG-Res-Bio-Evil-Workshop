@@ -13,3 +13,6 @@ apps/utils
 apps/themes
 apps/images
 .venv/
+/*_dist/
+/ResBio_Evil_Workshop
+/ResBio_Evil_Workshop.app/
